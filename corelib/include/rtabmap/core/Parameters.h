@@ -293,8 +293,8 @@ class RTABMAP_EXP Parameters
     RTABMAP_PARAM(FAST, GridCols,           int, 0,       "Grid cols (0 to disable). Adapts the detector to partition the source image into a grid and detect points in each cell.");
     RTABMAP_PARAM(FAST, CV,                 int, 0,       "Enable FastCV implementation if non-zero (and RTAB-Map is built with FastCV support). Values should be 9 and 10.");
 
-    RTABMAP_PARAM(GFTT, QualityLevel,      double, 0.001, "");
-    RTABMAP_PARAM(GFTT, MinDistance,       double, 3,    "");
+    RTABMAP_PARAM(GFTT, QualityLevel,      double, 0.005, "");
+    RTABMAP_PARAM(GFTT, MinDistance,       double, 20,    "");
     RTABMAP_PARAM(GFTT, BlockSize,         int, 3,       "");
     RTABMAP_PARAM(GFTT, UseHarrisDetector, bool, false,  "");
     RTABMAP_PARAM(GFTT, K,                 double, 0.04, "");
@@ -421,7 +421,7 @@ class RTABMAP_EXP Parameters
     RTABMAP_PARAM(GTSAM, Optimizer,       int, 1,          "0=Levenberg 1=GaussNewton 2=Dogleg");
 
     // Odometry
-    RTABMAP_PARAM(Odom, Strategy,               int, 0,       "0=Frame-to-Map (F2M) 1=Frame-to-Frame (F2F) 2=Fovis 3=viso2 4=DVO-SLAM 5=ORB_SLAM2 6=OKVIS 7=LOAM 8=MSCKF_VIO 9=VINS-Fusion");
+    RTABMAP_PARAM(Odom, Strategy,               int, 0,       "0=Frame-to-Map (F2M) 1=Frame-to-Frame (F2F) 2=Fovis 3=viso2 4=DVO-SLAM 5=ORB_SLAM2 6=OKVIS 7=LOAM 8=MSCKF_VIO 9=VINS-Fusion 10=VISFS");
     RTABMAP_PARAM(Odom, ResetCountdown,         int, 0,       "Automatically reset odometry after X consecutive images on which odometry cannot be computed (value=0 disables auto-reset).");
     RTABMAP_PARAM(Odom, Holonomic,              bool, true,   "If the robot is holonomic (strafing commands can be issued). If not, y value will be estimated from x and yaw values (y=x*tan(yaw)).");
     RTABMAP_PARAM(Odom, FillInfoData,           bool, true,   "Fill info with data (inliers/outliers features).");
@@ -559,6 +559,27 @@ class RTABMAP_EXP Parameters
 
     // Odometry VINS
     RTABMAP_PARAM_STR(OdomVINS, ConfigPath,     "",  "Path of VINS config file.");
+
+    // Odometry VISFS
+    RTABMAP_PARAM(OdomVISFS, MaxFeatures,           int,    300,    "The maximum number of key points will be generated.");
+    RTABMAP_PARAM(OdomVISFS, FlowBack,              bool,   true,   "Perform backward optical flow to improve feature tracking accuracy.");
+    RTABMAP_PARAM(OdomVISFS, MinParallax,           float,  10.0,   "Keyframe selection threshold (pixel).");
+    RTABMAP_PARAM(OdomVISFS, MaxDepth,              float,  5.0,    "Max depth of the features (0 means no limit).");
+    RTABMAP_PARAM(OdomVISFS, MinDepth,              float,  0.2,    "Min depth of the features (0 means no limit).");
+    RTABMAP_PARAM(OdomVISFS, FlowWinSize,           int,    18,     "Size of the search window at each pyramid level.");
+    RTABMAP_PARAM(OdomVISFS, FlowIterations,        int,    30,     "Termination criteria of the max interation times");
+    RTABMAP_PARAM(OdomVISFS, FlowEps,               float,  0.01,   "Termination criteria of the search window moves by less than criteria.epsilon");
+    RTABMAP_PARAM(OdomVISFS, FlowMaxLevel,          int,    3,      "Maximal pyramid level number; if set to 0, pyramids are not used (single level)");
+    RTABMAP_PARAM(OdomVISFS, MinInliers,            int,    12,     "Minimal inliers between two images.");
+    RTABMAP_PARAM(OdomVISFS, PnPIterations,         int,    100,    "Maximal interation times in ransac.");
+    RTABMAP_PARAM(OdomVISFS, PnPReprojError,        float,  2,      "PnP reprojection error.");
+    RTABMAP_PARAM(OdomVISFS, PnPFlags,              int,    0,      "PnP flags: 0=Iterative, 1=EPNP, 2=P3P.");
+    RTABMAP_PARAM(OdomVISFS, RefineIterations,      int,    5,      "Number of iterations used to refine the transformation found by RANSAC. 0 means that the transformation is not refined.");
+#if defined(RTABMAP_G2O)
+    RTABMAP_PARAM(OdomVISFS, BundleAdjustment,      int, 1,      "Optimization with bundle adjustment: 0=disabled, 1=g2o, 2=cvsba, 3=Ceres.");
+#else
+    RTABMAP_PARAM(OdomVISFS, BundleAdjustment,      int, 0,      "Optimization with bundle adjustment: 0=disabled, 1=g2o, 2=cvsba, 3=Ceres.");
+#endif
 
     // Common registration parameters
     RTABMAP_PARAM(Reg, RepeatOnce,               bool, true,    "Do a second registration with the output of the first registration as guess. Only done if no guess was provided for the first registration (like on loop closure). It can be useful if the registration approach used can use a guess to get better matches.");
