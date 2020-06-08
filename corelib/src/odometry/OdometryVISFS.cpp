@@ -113,6 +113,7 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
           output.isNull() ? _info->lost = true : _info->lost = false; 
           _info->features = newFrame.sensorData().keypoints().size();
           _info->keyFrameAdded = trackInfo.keyFrame;
+          _info->reg = trackInfo.copyWithoutData();
      }
 
 	UINFO("Odom update time = %fs lost=%s inliers=%d, ref frame corners=%d, transform accepted=%s",

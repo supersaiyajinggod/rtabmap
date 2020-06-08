@@ -170,8 +170,10 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 			std::for_each(corners.begin(), corners.end(), [&kptsFrom](cv::Point2f point){
 				kptsFrom.push_back(cv::KeyPoint(point, 1.f));
 			});
+			UDEBUG("New extract feature: %d.", static_cast<int>(kptsFrom.size()));
 		} else {
 			kptsFrom = _fromSignature.sensorData().keypoints();
+			UDEBUG("Get key points from the former signature's keypoints: %d.", static_cast<int>(kptsFrom.size()));
 		}
 	} else {		// Process the former extracted keypoints.
 		kptsFrom.resize(_fromSignature.getWords().size());
@@ -190,6 +192,7 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 			UDEBUG("IDs are not unique, IDs will be regenerated!");
 			orignalWordsFromIds.clear();			
 		}
+		UDEBUG("Get key points from the former signature's words2d: %d.", static_cast<int>(kptsFrom.size()));
 	}
 
 	std::multimap<int, cv::KeyPoint> wordsFrom;
@@ -208,6 +211,7 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 	} else {
 		kptsFrom3D = generateKeyPoints3D(_fromSignature.sensorData(), kptsFrom);
 	}
+	UDEBUG("Size of kptsFrom3D = %d", static_cast<int>(kptsFrom3D.size()));
 
 	// Do a initial estimate of the to signature key points's pixel positon.
 	std::vector<cv::Point2f> cornersFrom;
