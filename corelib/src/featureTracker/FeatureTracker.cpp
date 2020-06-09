@@ -25,6 +25,8 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <cstdarg>
+
 #include "rtabmap/core/featureTracker/FeatureTracker.h"
 #include "rtabmap/core/util3d_features.h"
 #include "rtabmap/core/util3d_motion_estimation.h"
@@ -37,6 +39,7 @@ namespace rtabmap {
 
 FeatureTracker::FeatureTracker(const ParametersMap & _parameters) : 
 	force3DoF_(Parameters::defaultRegForce3DoF()),
+	displayTracker_(Parameters::defaultOdomVISFSDisplayTracker()),
 	maxFeatures_(Parameters::defaultOdomVISFSMaxFeatures()),
 	qualityLevel_(Parameters::defaultGFTTQualityLevel()),
 	minDistance_(Parameters::defaultGFTTMinDistance()),
@@ -57,6 +60,7 @@ FeatureTracker::FeatureTracker(const ParametersMap & _parameters) :
 	parameters_ = _parameters;
 
 	Parameters::parse(parameters_, Parameters::kRegForce3DoF(), force3DoF_);
+	Parameters::parse(parameters_, Parameters::kOdomVISFSDisplayTracker(), displayTracker_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSMaxFeatures(), maxFeatures_);
 	Parameters::parse(parameters_, Parameters::kGFTTQualityLevel(), qualityLevel_);
 	Parameters::parse(parameters_, Parameters::kGFTTMinDistance(), minDistance_);
@@ -79,18 +83,6 @@ FeatureTracker::FeatureTracker(const ParametersMap & _parameters) :
 
 FeatureTracker::~FeatureTracker() {}
 
-Transform FeatureTracker::computeTransformation(const Signature & _fromSignature, const Signature & _toSignature, Transform _guess, TrackerInfo * _infoOut) const {
-	Signature fromCopy(_fromSignature);
-	Signature toCopy(_toSignature);
-	return computeTransformationMod(fromCopy, toCopy, _guess, _infoOut);
-}
-
-Transform FeatureTracker::computeTransformation(const SensorData & _fromSignature, const SensorData & _toSignature, Transform _guess, TrackerInfo * _infoOut) const {
-	Signature fromCopy(_fromSignature);
-	Signature toCopy(_toSignature);
-	return computeTransformationMod(fromCopy, toCopy, _guess, _infoOut);
-}
-
 std::vector<cv::Point3f> FeatureTracker::generateKeyPoints3D(const SensorData & _data, const std::vector<cv::KeyPoint> & _keyPoints) const {
 	std::vector<cv::Point3f> keyPoints3D;
 	if (_keyPoints.size()) {
@@ -105,6 +97,80 @@ inline float FeatureTracker::distanceL2(const cv::Point2f & pt1, const cv::Point
     float dx = pt1.x - pt2.x;
     float dy = pt1.y - pt2.y;
     return sqrt(dx * dx + dy * dy);
+}
+
+void FeatureTracker::displayTracker(int _n, ...) const {
+	UASSERT(_n == 7);
+
+	std::va_list vl;
+	va_start(vl, _n);
+
+	if (_n == 7) {	// Subsequence: ColorImageTo GrayImageFrom, GrayImageTo, cornersFrom, cornersTo, newCornersInTo, status
+		// cv::Mat imageToOri;
+		// cv::Mat imageFrom;
+		// cv::Mat imageTo;
+		std::vector<cv::Mat> imagesContainer;
+		// std::vector<cv::Point2f> cornersFrom;
+		// std::vector<cv::Point2f> cornersTo;
+		// std::vector<cv::Point2f> newCornersInTo;
+		std::vector<std::vector<cv::Point2f>> cornersContainer;
+		std::vector<unsigned char> status;
+		for (auto i = 0; i < _n; ++i) {
+			if (i <= 2) {
+				cv::Mat tempImage = va_arg(vl, cv::Mat);
+				if (tempImage.channels() !=3 )
+					cv::cvtColor(tempImage, tempImage, CV_GRAY2BGR);
+				imagesContainer.push_back(tempImage);
+			} else if (i > 2 && i < _n - 1) {
+				cornersContainer.push_back(va_arg(vl, std::vector<cv::Point2f>));
+			} else if (i == _n - 1) {
+				status = va_arg(vl, std::vector<unsigned char>);
+			}
+		}
+		va_end(vl);
+		UASSERT(imagesContainer.size() == 3);
+		UASSERT(cornersContainer.size() == 3);
+
+		const float cols = static_cast<float>(imagesContainer[2].cols);
+		cv::Mat top, bottom, fullImage;
+		cv::hconcat(imagesContainer[1], imagesContainer[2], top);
+		cv::hconcat(imagesContainer[1], imagesContainer[2], bottom);
+
+		for (std::size_t i = 0; i < status.size(); ++i) {
+			cv::circle(top, cornersContainer[0][i], 2, cv::Scalar(0, 0, 255), 1);
+			cv::circle(bottom, cornersContainer[0][i], 2, cv::Scalar(0, 0, 255), 1);
+			if (status[i]) {
+				cornersContainer[1][i].x += cols;
+				cv::circle(bottom, cornersContainer[1][i], 2, cv::Scalar(0, 0, 255), 1);
+				cv::line(bottom, cornersContainer[0][i], cornersContainer[1][i], cv::Scalar(0, 201, 80), 1);
+			} else {
+				cornersContainer[1][i].x += cols;
+				cv::circle(bottom, cornersContainer[1][i], 2, cv::Scalar(176, 48, 96), 1);
+			}
+		}
+		for (auto & corner : cornersContainer[2]) {
+			corner.x += cols;
+			cv::circle(top, corner, 2, cv::Scalar(255, 255, 0), 1);
+			// cv::circle(bottom, corner, 2, cv::Scalar(255, 255, 0), 1);
+		}
+
+		cv::vconcat(top, bottom, fullImage);
+		cv::namedWindow("Tracker", CV_WINDOW_NORMAL);
+		cv::imshow("Tracker", fullImage);
+		cv::waitKey(5);
+	}
+}
+
+Transform FeatureTracker::computeTransformation(const Signature & _fromSignature, const Signature & _toSignature, Transform _guess, TrackerInfo * _infoOut) const {
+	Signature fromCopy(_fromSignature);
+	Signature toCopy(_toSignature);
+	return computeTransformationMod(fromCopy, toCopy, _guess, _infoOut);
+}
+
+Transform FeatureTracker::computeTransformation(const SensorData & _fromSignature, const SensorData & _toSignature, Transform _guess, TrackerInfo * _infoOut) const {
+	Signature fromCopy(_fromSignature);
+	Signature toCopy(_toSignature);
+	return computeTransformationMod(fromCopy, toCopy, _guess, _infoOut);
 }
 
 Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, Signature & _toSignature, Transform _guess, TrackerInfo * _infoOut) const {
@@ -151,6 +217,9 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 	std::vector<int> orignalWordsFromIds;
 	cv::Mat imageFrom = _fromSignature.sensorData().imageRaw();
 	cv::Mat imageTo = _toSignature.sensorData().imageRaw();
+	cv::Mat imageToOri = _toSignature.sensorData().imageRaw();
+	// if (displayTracker_)
+	// 	cv::Mat imageToOri = _toSignature.sensorData().imageRaw();
 
 	if (imageFrom.channels() > 1) {
 		cv::Mat tmp;
@@ -533,8 +602,11 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 
 	_toSignature.sensorData().setFeatures(kptsTo, kptsTo3D, cv::Mat());
 
-	UDEBUG("inliers=%d/%d", _infoOut->inliers, _infoOut->matches);
-	UDEBUG("transform=%s", transform.prettyPrint().c_str());
+	if (displayTracker_) 
+		displayTracker(7, imageToOri, imageFrom, imageTo, cornersFrom, cornersTo, newCornersInTo, status);
+
+	UINFO("inliers=%d/%d", _infoOut->inliers, _infoOut->matches);
+	UINFO("transform=%s", transform.prettyPrint().c_str());
 	return transform;
 
 }

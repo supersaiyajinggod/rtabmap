@@ -105,12 +105,14 @@ public:
 private:
 	std::vector<cv::Point3f> generateKeyPoints3D(const SensorData & _data, const std::vector<cv::KeyPoint> & _keyPoints) const;
 	inline float distanceL2(const cv::Point2f & pt1, const cv::Point2f & pt2) const;
+	void displayTracker(int _n, ...) const;
 
 private:
 	const double COVARIANCE_EPSILON = 0.000000001;
 
 	ParametersMap parameters_;
 	bool force3DoF_;
+	bool displayTracker_;
 	int maxFeatures_;
 	double qualityLevel_;
 	int minDistance_;

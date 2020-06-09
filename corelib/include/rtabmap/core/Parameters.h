@@ -561,6 +561,7 @@ class RTABMAP_EXP Parameters
     RTABMAP_PARAM_STR(OdomVINS, ConfigPath,     "",  "Path of VINS config file.");
 
     // Odometry VISFS
+    RTABMAP_PARAM(OdomVISFS, DisplayTracker,        bool,   false,  "Display the detail imformation in tracking process");
     RTABMAP_PARAM(OdomVISFS, MaxFeatures,           int,    300,    "The maximum number of key points will be generated.");
     RTABMAP_PARAM(OdomVISFS, FlowBack,              bool,   true,   "Perform backward optical flow to improve feature tracking accuracy.");
     RTABMAP_PARAM(OdomVISFS, MinParallax,           float,  10.0,   "Keyframe selection threshold (pixel).");
