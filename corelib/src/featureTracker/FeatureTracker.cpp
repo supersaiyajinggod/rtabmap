@@ -316,7 +316,7 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 								cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, flowIterations_, flowEps_),
 								cv::OPTFLOW_LK_GET_MIN_EIGENVALS | cv::OPTFLOW_USE_INITIAL_FLOW, 1e-4);
 		for (std::size_t i = 0; i < status.size(); ++i) {
-			if (status[i] && reverseStatus[i] && distanceL2(cornersReverse[i], cornersFrom[i]) <= 0.5) {
+			if (status[i] && reverseStatus[i] && distanceL2(cornersReverse[i], cornersFrom[i]) <= 1.5) {
 				status[i] = 1;
 			} else {
 				status[i] = 0;

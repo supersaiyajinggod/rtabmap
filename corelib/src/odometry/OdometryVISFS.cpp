@@ -76,8 +76,16 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
      
           // If OdometryVISFS failed, use F2M strategy.
 
-          if (output.isNull()) 
-               UWARN("Trial failed.");
+          if (output.isNull()) {
+               UINFO("Trial failed. ~~~!!!~~~");
+               tmpRefFrame = lastFrame_;
+			// Reset matches, but keep already extracted features in newFrame.sensorData()
+			newFrame.setWords(std::multimap<int, cv::KeyPoint>());
+			newFrame.setWords3(std::multimap<int, cv::Point3f>());
+			newFrame.setWordsDescriptors(std::multimap<int, cv::Mat>());
+               // Retry the calculate again with no guess.
+               output = featureTracker_->computeTransformationMod(tmpRefFrame, newFrame, Transform(), &trackInfo);
+          }
 
           if (_info) {
                Transform t = this->getPose()*motionSinceLastFrame.inverse();
