@@ -50,10 +50,10 @@ public:
 public:
 	CameraK4A(int deviceId = 0,
 		float imageRate = 0.0f,
-		const Transform & localTransform = Transform::getIdentity());
+		const Transform & localTransform = CameraModel::opticalRotation());
 	CameraK4A(const std::string & fileName,
 		float imageRate = 0.0f,
-		const Transform & localTransform = Transform::getIdentity());
+		const Transform & localTransform = CameraModel::opticalRotation());
 	virtual ~CameraK4A();
 
 	virtual bool init(const std::string & calibrationFolder = ".", const std::string & cameraName = "");
@@ -61,6 +61,7 @@ public:
 	virtual std::string getSerial() const;
 
 	void setIRDepthFormat(bool enabled);
+	void setPreferences(int rgb_resolution, int framerate, int depth_resolution);
 
 protected:
 	virtual SensorData captureImage(CameraInfo * info = 0);
@@ -83,6 +84,9 @@ private:
 	CameraModel model_;
 	int deviceId_;
 	std::string fileName_;
+	int rgb_resolution_;
+	int framerate_;
+	int depth_resolution_;
 	bool ir_;
 	double previousStamp_;
 	UTimer timer_;

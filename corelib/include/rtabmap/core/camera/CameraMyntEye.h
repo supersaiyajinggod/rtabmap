@@ -52,7 +52,7 @@ public:
 	static bool available();
 
 public:
-	CameraMyntEye(const std::string & device = "", bool apiRectification = false, bool apiDepth = false, float imageRate = 0, const Transform & localTransform = Transform::getIdentity());
+	CameraMyntEye(const std::string & device = "", bool apiRectification = false, bool apiDepth = false, float imageRate = 0, const Transform & localTransform = CameraModel::opticalRotation());
 	virtual ~CameraMyntEye();
 
 	virtual bool init(const std::string & calibrationFolder = ".", const std::string & cameraName = "");
@@ -61,6 +61,9 @@ public:
 	virtual bool odomProvided() const { return false; }
 
 	void publishInterIMU(bool enabled);
+	void setAutoExposure();
+	void setManualExposure(int gain=24, int brightness=120, int constrast=116);
+	void setIrControl(int value);
 
 protected:
 	/**
@@ -80,6 +83,11 @@ private:
 	std::string deviceName_;
 	bool apiRectification_;
 	bool apiDepth_;
+	bool autoExposure_;
+	int gain_;
+	int brightness_;
+	int contrast_;
+	int irControl_;
 	USemaphore dataReady_;
 	UMutex dataMutex_;
 	cv::Mat leftFrameBuffer_;
@@ -94,7 +102,7 @@ private:
 
 	double softTimeBegin_;
 	std::uint64_t hardTimeBegin_;
-	std::uint64_t unitHardTime;
+	std::uint64_t unitHardTime_;
 	std::vector<std::uint64_t> lastHardTimes_;
 	std::vector<std::uint64_t> acc_;
 #endif

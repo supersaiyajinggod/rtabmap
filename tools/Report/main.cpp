@@ -297,15 +297,18 @@ int main(int argc, char * argv[])
 						std::map<std::string, int> availableStats;
 						for(std::set<int>::iterator iter=ids.begin(); iter!=ids.end(); ++iter)
 						{
-							for(std::map<std::string, float>::iterator jter=stats.at(*iter).first.begin(); jter!=stats.at(*iter).first.end(); ++jter)
+							if(stats.find(*iter) != stats.end())
 							{
-								if(availableStats.find(jter->first) != availableStats.end())
+								for(std::map<std::string, float>::iterator jter=stats.at(*iter).first.begin(); jter!=stats.at(*iter).first.end(); ++jter)
 								{
-									++availableStats.at(jter->first);
-								}
-								else
-								{
-									availableStats.insert(std::make_pair(jter->first, 1));
+									if(availableStats.find(jter->first) != availableStats.end())
+									{
+										++availableStats.at(jter->first);
+									}
+									else
+									{
+										availableStats.insert(std::make_pair(jter->first, 1));
+									}
 								}
 							}
 						}
@@ -319,7 +322,6 @@ int main(int argc, char * argv[])
 					}
 
 					std::map<std::string, UPlotCurve*> curves;
-					std::map<std::string, double> firstStamps;
 					if(statsToShow.empty())
 					{
 						for(std::map<std::string, UPlot*>::iterator iter=figures.begin(); iter!=figures.end(); ++iter)
@@ -432,16 +434,12 @@ int main(int argc, char * argv[])
 								{
 									if(uContains(stat, jter->first) && *iter >= startId)
 									{
-										if(!uContains(firstStamps, jter->first))
-										{
-											firstStamps.insert(std::make_pair(jter->first, s));
-										}
-										float x = s - firstStamps.at(jter->first);
+										double x = s;
 										if(useIds)
 										{
 											x = *iter;
 										}
-										float y = stat.at(jter->first);
+										double y = stat.at(jter->first);
 										jter->second->addValue(x,y);
 									}
 								}
@@ -926,6 +924,10 @@ int main(int argc, char * argv[])
 	{
 		for(std::map<std::string, UPlot*>::iterator iter=figures.begin(); iter!=figures.end(); ++iter)
 		{
+			if(!useIds)
+			{
+				iter->second->frameData();
+			}
 			iter->second->show();
 		}
 		return app.exec();

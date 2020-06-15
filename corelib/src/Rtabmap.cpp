@@ -34,6 +34,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "rtabmap/core/EpipolarGeometry.h"
 
+#include "rtabmap/core/DBDriver.h"
 #include "rtabmap/core/Memory.h"
 #include "rtabmap/core/VWDictionary.h"
 #include "rtabmap/core/BayesFilter.h"
@@ -133,6 +134,7 @@ Rtabmap::Rtabmap() :
 	_lastProcessTime(0.0),
 	_someNodesHaveBeenTransferred(false),
 	_distanceTravelled(0.0f),
+	_optimizeFromGraphEndChanged(false),
 	_epipolarGeometry(0),
 	_bayesFilter(0),
 	_graphOptimizer(0),
@@ -285,15 +287,9 @@ void Rtabmap::flushStatisticLogs()
 	}
 }
 
-void Rtabmap::init(const ParametersMap & parameters, const std::string & databasePath)
+void Rtabmap::init(const ParametersMap & parameters, const std::string & databasePath, bool loadDatabaseParameters)
 {
 	UDEBUG("path=%s", databasePath.c_str());
-	ParametersMap::const_iterator iter;
-	if((iter=parameters.find(Parameters::kRtabmapWorkingDirectory())) != parameters.end())
-	{
-		this->setWorkingDirectory(iter->second.c_str());
-	}
-
 	_databasePath = databasePath;
 	if(!_databasePath.empty())
 	{
@@ -307,15 +303,35 @@ void Rtabmap::init(const ParametersMap & parameters, const std::string & databas
 
 	bool newDatabase = _databasePath.empty() || !UFile::exists(_databasePath);
 
-	// If not exist, create a memory
+	ParametersMap allParameters;
+	if(!newDatabase && loadDatabaseParameters)
+	{
+		DBDriver * driver = DBDriver::create();
+		if(driver->openConnection(_databasePath, false))
+		{
+			allParameters = driver->getLastParameters();
+			// ignore working directory (we may be on a different computer)
+			allParameters.erase(Parameters::kRtabmapWorkingDirectory());
+		}
+		delete driver;
+	}
+
+	uInsert(allParameters, parameters);
+	ParametersMap::const_iterator iter;
+	if((iter=allParameters.find(Parameters::kRtabmapWorkingDirectory())) != allParameters.end())
+	{
+		this->setWorkingDirectory(iter->second.c_str());
+	}
+
+	// If doesn't exist, create a memory
 	if(!_memory)
 	{
-		_memory = new Memory(parameters);
-		_memory->init(_databasePath, false, parameters, true);
+		_memory = new Memory(allParameters);
+		_memory->init(_databasePath, false, allParameters, true);
 	}
 
 	// Parse all parameters
-	this->parseParameters(parameters);
+	this->parseParameters(allParameters);
 
 	Transform lastPose;
 	_optimizedPoses = _memory->loadOptimizedPoses(&lastPose);
@@ -346,7 +362,7 @@ void Rtabmap::init(const ParametersMap & parameters, const std::string & databas
 	setupLogFiles(newDatabase);
 }
 
-void Rtabmap::init(const std::string & configFile, const std::string & databasePath)
+void Rtabmap::init(const std::string & configFile, const std::string & databasePath, bool loadDatabaseParameters)
 {
 	// fill ctrl struct with values from the configuration file
 	ParametersMap param;// = Parameters::defaultParameters;
@@ -357,7 +373,7 @@ void Rtabmap::init(const std::string & configFile, const std::string & databaseP
 		Parameters::readINI(configFile, param);
 	}
 
-	this->init(param, databasePath);
+	this->init(param, databasePath, loadDatabaseParameters);
 }
 
 void Rtabmap::close(bool databaseSaved, const std::string & ouputDatabasePath)
@@ -375,6 +391,7 @@ void Rtabmap::close(bool databaseSaved, const std::string & ouputDatabasePath)
 	_odomCachePoses.clear();
 	_odomCacheConstraints.clear();
 	_distanceTravelled = 0.0f;
+	_optimizeFromGraphEndChanged = false;
 	this->clearPath(0);
 	_gpsGeocentricCache.clear();
 	_currentSessionHasGPS = false;
@@ -478,7 +495,12 @@ void Rtabmap::parseParameters(const ParametersMap & parameters)
 		_proximityAngle *= M_PI/180.0f;
 	}
 	Parameters::parse(parameters, Parameters::kRGBDProximityOdomGuess(), _proximityOdomGuess);
+	bool optimizeFromGraphEndPrevious = _optimizeFromGraphEnd;
 	Parameters::parse(parameters, Parameters::kRGBDOptimizeFromGraphEnd(), _optimizeFromGraphEnd);
+	if(optimizeFromGraphEndPrevious != _optimizeFromGraphEnd)
+	{
+		_optimizeFromGraphEndChanged = true;
+	}
 	Parameters::parse(parameters, Parameters::kRGBDOptimizeMaxError(), _optimizationMaxError);
 	if(_optimizationMaxError > 0.0 && _optimizationMaxError < 1.0)
 	{
@@ -722,11 +744,17 @@ int Rtabmap::triggerNewMap()
 	int mapId = -1;
 	if(_memory)
 	{
+		_lastLocalizationNodeId = 0;
+		_odomCachePoses.clear();
+		_odomCacheConstraints.clear();
+
 		if(!_memory->isIncremental())
 		{
-			UWARN("Memory is not incremental (%s=false), ignoring creating a new map as we "
-				  "should be already processing new nodes in a new session.",
-				  Parameters::kMemIncrementalMemory().c_str());
+			if(_savedLocalizationIgnored)
+			{
+				_mapCorrection.setIdentity();
+				_lastLocalizationPose.setIdentity();
+			}
 			return mapId;
 		}
 		std::map<int, int> reducedIds;
@@ -734,9 +762,6 @@ int Rtabmap::triggerNewMap()
 		UINFO("New map triggered, new map = %d", mapId);
 		_optimizedPoses.clear();
 		_constraints.clear();
-		_lastLocalizationNodeId = 0;
-		_odomCachePoses.clear();
-		_odomCacheConstraints.clear();
 
 		if(_bayesFilter)
 		{
@@ -887,6 +912,7 @@ void Rtabmap::resetMemory()
 	_odomCachePoses.clear();
 	_odomCacheConstraints.clear();
 	_distanceTravelled = 0.0f;
+	_optimizeFromGraphEndChanged = false;
 	this->clearPath(0);
 
 	if(_memory)
@@ -1045,36 +1071,34 @@ bool Rtabmap::process(
 	bool fakeOdom = false;
 	if(_rgbdSlamMode)
 	{
-		if(!_memory->isIncremental() && !odomPose.isNull())
+		if(!_memory->isIncremental() &&
+			!odomPose.isNull() &&
+			_optimizedPoses.size() &&
+			_mapCorrection.isIdentity() &&
+			!_lastLocalizationPose.isNull() &&
+			!_lastLocalizationPose.isIdentity() &&
+			_lastLocalizationNodeId == 0)
 		{
-			if(!_mapCorrectionBackup.isNull())
+			// Localization mode
+			if(!_optimizeFromGraphEnd)
 			{
-				_mapCorrection = _mapCorrectionBackup;
-				_mapCorrectionBackup.setNull();
+				//set map->odom so that odom is moved back to last saved localization
+				_mapCorrection = _lastLocalizationPose * odomPose.inverse();
+				std::map<int, Transform> nodesOnly(_optimizedPoses.lower_bound(1), _optimizedPoses.end());
+				_lastLocalizationNodeId = graph::findNearestNode(nodesOnly, _lastLocalizationPose);
+				UWARN("Update map correction based on last localization saved in database! correction = %s, nearest id = %d of last pose = %s, odom = %s",
+						_mapCorrection.prettyPrint().c_str(),
+						_lastLocalizationNodeId,
+						_lastLocalizationPose.prettyPrint().c_str(),
+						odomPose.prettyPrint().c_str());
 			}
-			else if(_optimizedPoses.size() && _mapCorrection.isIdentity() && !_lastLocalizationPose.isNull() && _lastLocalizationNodeId == 0)
+			else
 			{
-				// Localization mode
-				if(!_optimizeFromGraphEnd)
+				//move optimized poses accordingly to last saved localization
+				Transform mapCorrectionInv = odomPose * _lastLocalizationPose.inverse();
+				for(std::map<int, Transform>::iterator iter=_optimizedPoses.begin(); iter!=_optimizedPoses.end(); ++iter)
 				{
-					//set map->odom so that odom is moved back to last saved localization
-					_mapCorrection = _lastLocalizationPose * odomPose.inverse();
-					std::map<int, Transform> nodesOnly(_optimizedPoses.lower_bound(1), _optimizedPoses.end());
-					_lastLocalizationNodeId = graph::findNearestNode(nodesOnly, _lastLocalizationPose);
-					UWARN("Update map correction based on last localization saved in database! correction = %s, nearest id = %d of last pose = %s, odom = %s",
-							_mapCorrection.prettyPrint().c_str(),
-							_lastLocalizationNodeId,
-							_lastLocalizationPose.prettyPrint().c_str(),
-							odomPose.prettyPrint().c_str());
-				}
-				else
-				{
-					//move optimized poses accordingly to last saved localization
-					Transform mapCorrectionInv = odomPose * _lastLocalizationPose.inverse();
-					for(std::map<int, Transform>::iterator iter=_optimizedPoses.begin(); iter!=_optimizedPoses.end(); ++iter)
-					{
-						iter->second = mapCorrectionInv * iter->second;
-					}
+					iter->second = mapCorrectionInv * iter->second;
 				}
 			}
 		}
@@ -1089,12 +1113,20 @@ bool Rtabmap::process(
 			}
 			else // fake localization
 			{
+				if(!_mapCorrectionBackup.isNull())
+				{
+					_mapCorrection = _mapCorrectionBackup;
+					_mapCorrectionBackup.setNull();
+				}
 				if(_lastLocalizationPose.isNull())
 				{
 					_lastLocalizationPose = Transform::getIdentity();
 				}
 				fakeOdom = true;
 				odomPose = _mapCorrection.inverse() * _lastLocalizationPose;
+				UDEBUG("Map correction = %s", _mapCorrection.prettyPrint().c_str());
+				UDEBUG("Last localization pose: %s", _lastLocalizationPose.prettyPrint().c_str());
+				UDEBUG("Fake odom: %s", odomPose.prettyPrint().c_str());
 			}
 		}
 		else if(_memory->isIncremental()) // only in mapping mode
@@ -1343,6 +1375,7 @@ bool Rtabmap::process(
 				_constraints.insert(std::make_pair(iter->first, iter->second.inverse()));
 			}
 		}
+		// only in mapping mode we add a neighbor link
 		if(signature->getLinks().size() &&
 		   signature->getLinks().begin()->second.type() == Link::kNeighbor)
 		{
@@ -1373,6 +1406,11 @@ bool Rtabmap::process(
 		_lastLocalizationPose = newPose; // keep in cache the latest corrected pose
 		if(!_memory->isIncremental())
 		{
+			if(!_odomCacheAddLink.empty())
+			{
+				float odomDistance = (_odomCacheAddLink.rbegin()->second.inverse() * signature->getPose()).getNorm();
+				_distanceTravelled += odomDistance;
+			}
 			_odomCacheAddLink.insert(std::make_pair(signature->id(), signature->getPose()));
 			while(!_odomCacheAddLink.empty() && (int)_odomCacheAddLink.size() > _maxOdomCacheSize+1)
 			{
@@ -1407,7 +1445,6 @@ bool Rtabmap::process(
 										 odomCovariance.inv())));
 					_odomCachePoses.insert(std::make_pair(signature->id(), signature->getPose())); // keep odometry poses
 				}
-
 			}
 		}
 
@@ -2807,10 +2844,12 @@ bool Rtabmap::process(
 				else
 				{
 					Transform newPose = _optimizedPoses.at(localizationLinks.begin()->first) * localizationLinks.begin()->second.transform().inverse();
+					UDEBUG("newPose=%s", newPose.prettyPrint().c_str());
 					if(_graphOptimizer->isSlam2d())
 					{
 						// in case of 3d landmarks, transform constraint to 2D
 						newPose = newPose.to3DoF();
+						UDEBUG("newPose 2D=%s", newPose.prettyPrint().c_str());
 					}
 					else if(_graphOptimizer->gravitySigma() > 0)
 					{
@@ -2843,6 +2882,7 @@ bool Rtabmap::process(
 							transform *= error;
 
 							newPose  = _optimizedPoses.at(loopId) * transform.inverse();
+							UDEBUG("newPose gravity=%s", newPose.prettyPrint().c_str());
 						}
 						else
 						{
@@ -2874,23 +2914,12 @@ bool Rtabmap::process(
 			std::map<int, Transform> poses = _optimizedPoses;
 
 			// if _optimizeFromGraphEnd parameter just changed state, don't use optimized poses as guess
-			float normMapCorrection = _mapCorrection.getNormSquared(); // use distance for identity detection
-			if((normMapCorrection > 0.001f && _optimizeFromGraphEnd) ||
-				(normMapCorrection < 0.0001f && !_optimizeFromGraphEnd))
+			if(_optimizeFromGraphEndChanged)
 			{
-				for(std::multimap<int, Link>::iterator iter=_constraints.begin(); iter!=_constraints.end(); ++iter)
-				{
-					if( iter->second.type() != Link::kNeighbor &&
-						iter->second.type() != Link::kVirtualClosure &&
-						iter->second.type() != Link::kLandmark &&
-						iter->second.type() != Link::kGravity &&
-						iter->second.type() != Link::kPosePrior)
-					{
-						UWARN("Optimization: clearing guess poses as %s may have changed state, now %s (normMapCorrection=%f)", Parameters::kRGBDOptimizeFromGraphEnd().c_str(), _optimizeFromGraphEnd?"true":"false", normMapCorrection);
-						poses.clear();
-						break;
-					}
-				}
+				UWARN("Optimization: clearing guess poses as %s has changed state, now %s",
+						Parameters::kRGBDOptimizeFromGraphEnd().c_str(), _optimizeFromGraphEnd?"true":"false");
+				poses.clear();
+				_optimizeFromGraphEndChanged = false;
 			}
 
 			std::multimap<int, Link> constraints;
@@ -3125,6 +3154,7 @@ bool Rtabmap::process(
 			statistics_.addStatistic(Statistics::kProximitySpace_last_detection_id(), lastProximitySpaceClosureId);
 			statistics_.setProximityDetectionId(lastProximitySpaceClosureId);
 			statistics_.setProximityDetectionMapId(_memory->getMapId(lastProximitySpaceClosureId));
+			float x,y,z,roll,pitch,yaw;
 			if(_loopClosureHypothesis.first || lastProximitySpaceClosureId)
 			{
 				// Loop closure transform
@@ -3133,6 +3163,9 @@ bool Rtabmap::process(
 				UASSERT(loopIter!=sLoop->getLinks().end());
 				UINFO("Set loop closure transform = %s", loopIter->second.transform().prettyPrint().c_str());
 				statistics_.setLoopClosureTransform(loopIter->second.transform());
+
+				statistics_.addStatistic(Statistics::kLoopMap_id(), sLoop->mapId());
+				statistics_.addStatistic(Statistics::kLoopVisual_words(), sLoop->getWords().size());
 
 				// if ground truth exists, compute localization error
 				if(!sLoop->getGroundTruthPose().isNull() && !signature->getGroundTruthPose().isNull())
@@ -3143,13 +3176,22 @@ bool Rtabmap::process(
 					statistics_.addStatistic(Statistics::kGtLocalization_angular_error(), error.getAngle(1,0,0)*180/M_PI);
 				}
 
-				// Odom correction (actual odometry pose change)
-				if(!previousMapCorrection.isNull() && !odomPose.isNull())
+				statistics_.addStatistic(Statistics::kLoopMapToOdom_norm(), _mapCorrection.getNorm());
+				statistics_.addStatistic(Statistics::kLoopMapToOdom_angle(), _mapCorrection.getAngle()*180.0f/M_PI);
+				_mapCorrection.getTranslationAndEulerAngles(x, y, z, roll, pitch, yaw);
+				statistics_.addStatistic(Statistics::kLoopMapToOdom_x(), x);
+				statistics_.addStatistic(Statistics::kLoopMapToOdom_y(), y);
+				statistics_.addStatistic(Statistics::kLoopMapToOdom_z(), z);
+				statistics_.addStatistic(Statistics::kLoopMapToOdom_roll(),  roll*180.0f/M_PI);
+				statistics_.addStatistic(Statistics::kLoopMapToOdom_pitch(),  pitch*180.0f/M_PI);
+				statistics_.addStatistic(Statistics::kLoopMapToOdom_yaw(), yaw*180.0f/M_PI);
+
+				// Odom correction (actual odometry pose change), ignore correction from first localization
+				if(!odomPose.isNull() && !previousMapCorrection.isNull() && !previousMapCorrection.isIdentity())
 				{
 					Transform odomCorrection = (previousMapCorrection*odomPose).inverse()*_mapCorrection*odomPose;
 					statistics_.addStatistic(Statistics::kLoopOdom_correction_norm(), odomCorrection.getNorm());
 					statistics_.addStatistic(Statistics::kLoopOdom_correction_angle(), odomCorrection.getAngle()*180.0f/M_PI);
-					float x,y,z,roll,pitch,yaw;
 					odomCorrection.getTranslationAndEulerAngles(x, y, z, roll, pitch, yaw);
 					statistics_.addStatistic(Statistics::kLoopOdom_correction_x(), x);
 					statistics_.addStatistic(Statistics::kLoopOdom_correction_y(), y);
@@ -3159,6 +3201,18 @@ bool Rtabmap::process(
 					statistics_.addStatistic(Statistics::kLoopOdom_correction_yaw(), yaw*180.0f/M_PI);
 				}
 			}
+			if(!_lastLocalizationPose.isNull() && !_lastLocalizationPose.isIdentity())
+			{
+				_lastLocalizationPose.getTranslationAndEulerAngles(x, y, z, roll, pitch, yaw);
+				statistics_.addStatistic(Statistics::kLoopMapToBase_x(), x);
+				statistics_.addStatistic(Statistics::kLoopMapToBase_y(), y);
+				statistics_.addStatistic(Statistics::kLoopMapToBase_z(), z);
+				statistics_.addStatistic(Statistics::kLoopMapToBase_roll(),  roll*180.0f/M_PI);
+				statistics_.addStatistic(Statistics::kLoopMapToBase_pitch(),  pitch*180.0f/M_PI);
+				statistics_.addStatistic(Statistics::kLoopMapToBase_yaw(), yaw*180.0f/M_PI);
+				UINFO("Localization pose = %s", _lastLocalizationPose.prettyPrint().c_str());
+			}
+
 			statistics_.setMapCorrection(_mapCorrection);
 			UINFO("Set map correction = %s", _mapCorrection.prettyPrint().c_str());
 			statistics_.setLocalizationCovariance(localizationCovariance);
@@ -4060,7 +4114,7 @@ void Rtabmap::optimizeCurrentMap(
 		int * iterationsDone) const
 {
 	//Optimize the map
-	UINFO("Optimize map: around location %d", id);
+	UINFO("Optimize map: around location %d (lookInDatabase=%s)", id, lookInDatabase?"true":"false");
 	if(_memory && id > 0)
 	{
 		UTimer timer;

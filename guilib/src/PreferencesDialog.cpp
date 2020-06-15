@@ -421,6 +421,7 @@ PreferencesDialog::PreferencesDialog(QWidget * parent) :
 	connect(_ui->radioButton_nochangeGraphView, SIGNAL(toggled(bool)), this, SLOT(makeObsoleteGeneralPanel()));
 	connect(_ui->checkbox_odomDisabled, SIGNAL(stateChanged(int)), this, SLOT(makeObsoleteGeneralPanel()));
 	connect(_ui->odom_registration, SIGNAL(currentIndexChanged(int)), this, SLOT(makeObsoleteGeneralPanel()));
+	connect(_ui->odom_f2m_gravitySigma, SIGNAL(valueChanged(double)), this, SLOT(makeObsoleteGeneralPanel()));
 	connect(_ui->checkbox_groundTruthAlign, SIGNAL(stateChanged(int)), this, SLOT(makeObsoleteGeneralPanel()));
 
 	// Cloud rendering panel
@@ -733,6 +734,11 @@ PreferencesDialog::PreferencesDialog(QWidget * parent) :
 
 	connect(_ui->checkbox_stereoMyntEye_rectify, SIGNAL(stateChanged(int)), this, SLOT(makeObsoleteSourcePanel()));
 	connect(_ui->checkbox_stereoMyntEye_depth, SIGNAL(stateChanged(int)), this, SLOT(makeObsoleteSourcePanel()));
+	connect(_ui->checkbox_stereoMyntEye_autoExposure, SIGNAL(stateChanged(int)), this, SLOT(makeObsoleteSourcePanel()));
+	connect(_ui->spinBox_stereoMyntEye_gain, SIGNAL(valueChanged(int)), this, SLOT(makeObsoleteSourcePanel()));
+	connect(_ui->spinBox_stereoMyntEye_brightness, SIGNAL(valueChanged(int)), this, SLOT(makeObsoleteSourcePanel()));
+	connect(_ui->spinBox_stereoMyntEye_contrast, SIGNAL(valueChanged(int)), this, SLOT(makeObsoleteSourcePanel()));
+	connect(_ui->spinBox_stereoMyntEye_irControl, SIGNAL(valueChanged(int)), this, SLOT(makeObsoleteSourcePanel()));
 
 	connect(_ui->checkbox_rgbd_colorOnly, SIGNAL(stateChanged(int)), this, SLOT(makeObsoleteSourcePanel()));
 	connect(_ui->spinBox_source_imageDecimation, SIGNAL(valueChanged(int)), this, SLOT(makeObsoleteSourcePanel()));
@@ -742,6 +748,9 @@ PreferencesDialog::PreferencesDialog(QWidget * parent) :
 	connect(_ui->pushButton_calibrate_simple, SIGNAL(clicked()), this, SLOT(calibrateSimple()));
 	connect(_ui->toolButton_openniOniPath, SIGNAL(clicked()), this, SLOT(selectSourceOniPath()));
 	connect(_ui->toolButton_openni2OniPath, SIGNAL(clicked()), this, SLOT(selectSourceOni2Path()));
+	connect(_ui->comboBox_k4a_rgb_resolution, SIGNAL(currentIndexChanged(int)), this, SLOT(makeObsoleteSourcePanel()));
+	connect(_ui->comboBox_k4a_framerate, SIGNAL(currentIndexChanged(int)), this, SLOT(makeObsoleteSourcePanel()));
+	connect(_ui->comboBox_k4a_depth_resolution, SIGNAL(currentIndexChanged(int)), this, SLOT(makeObsoleteSourcePanel()));
 	connect(_ui->toolButton_k4a_mkv, SIGNAL(clicked()), this, SLOT(selectSourceMKVPath()));
 	connect(_ui->toolButton_source_distortionModel, SIGNAL(clicked()), this, SLOT(selectSourceDistortionModel()));
 	connect(_ui->toolButton_distortionModel, SIGNAL(clicked()), this, SLOT(visualizeDistortionModel()));
@@ -1877,6 +1886,9 @@ void PreferencesDialog::resetSettings(QGroupBox * groupBox)
 		_ui->lineEdit_rs2_jsonFile->clear();
 		_ui->lineEdit_openniOniPath->clear();
 		_ui->lineEdit_openni2OniPath->clear();
+		_ui->comboBox_k4a_rgb_resolution->setCurrentIndex(1);
+		_ui->comboBox_k4a_framerate->setCurrentIndex(2);
+		_ui->comboBox_k4a_depth_resolution->setCurrentIndex(2);
 		_ui->checkbox_k4a_irDepth->setChecked(false);
 		_ui->lineEdit_k4a_mkv->clear();
 		_ui->source_checkBox_useMKVStamps->setChecked(true);
@@ -1910,6 +1922,11 @@ void PreferencesDialog::resetSettings(QGroupBox * groupBox)
 		_ui->checkbox_stereoRealSense2_odom->setChecked(false);
 		_ui->checkbox_stereoMyntEye_rectify->setChecked(false);
 		_ui->checkbox_stereoMyntEye_depth->setChecked(false);
+		_ui->checkbox_stereoMyntEye_autoExposure->setChecked(true);
+		_ui->spinBox_stereoMyntEye_gain->setValue(24);
+		_ui->spinBox_stereoMyntEye_brightness->setValue(120);
+		_ui->spinBox_stereoMyntEye_contrast->setValue(116);
+		_ui->spinBox_stereoMyntEye_irControl->setValue(0);
 
 		_ui->checkBox_cameraImages_timestamps->setChecked(false);
 		_ui->checkBox_cameraImages_syncTimeStamps->setChecked(true);
@@ -2021,6 +2038,7 @@ void PreferencesDialog::resetSettings(QGroupBox * groupBox)
 		if(groupBox->objectName() == _ui->groupBox_odometry1->objectName())
 		{
 			_ui->odom_registration->setCurrentIndex(3);
+			_ui->odom_f2m_gravitySigma->setValue(-1);
 		}
 	}
 }
@@ -2146,6 +2164,7 @@ void PreferencesDialog::readGuiSettings(const QString & filePath)
 	_ui->radioButton_nochangeGraphView->setChecked(settings.value("nochangeGraphView", _ui->radioButton_nochangeGraphView->isChecked()).toBool());
 	_ui->checkbox_odomDisabled->setChecked(settings.value("odomDisabled", _ui->checkbox_odomDisabled->isChecked()).toBool());
 	_ui->odom_registration->setCurrentIndex(settings.value("odomRegistration", _ui->odom_registration->currentIndex()).toInt());
+	_ui->odom_f2m_gravitySigma->setValue(settings.value("odomF2MGravitySigma", _ui->odom_f2m_gravitySigma->value()).toDouble());
 	_ui->checkbox_groundTruthAlign->setChecked(settings.value("gtAlign", _ui->checkbox_groundTruthAlign->isChecked()).toBool());
 
 	for(int i=0; i<2; ++i)
@@ -2293,6 +2312,9 @@ void PreferencesDialog::readCameraSettings(const QString & filePath)
 	settings.endGroup(); // K4W2
 
 	settings.beginGroup("K4A");
+	_ui->comboBox_k4a_rgb_resolution->setCurrentIndex(settings.value("rgb_resolution", _ui->comboBox_k4a_rgb_resolution->currentIndex()).toInt());
+	_ui->comboBox_k4a_framerate->setCurrentIndex(settings.value("framerate", _ui->comboBox_k4a_framerate->currentIndex()).toInt());
+	_ui->comboBox_k4a_depth_resolution->setCurrentIndex(settings.value("depth_resolution", _ui->comboBox_k4a_depth_resolution->currentIndex()).toInt());
 	_ui->checkbox_k4a_irDepth->setChecked(settings.value("ir", _ui->checkbox_k4a_irDepth->isChecked()).toBool());
 	_ui->lineEdit_k4a_mkv->setText(settings.value("mkvPath", _ui->lineEdit_k4a_mkv->text()).toString());
 	_ui->source_checkBox_useMKVStamps->setChecked(settings.value("useMkvStamps", _ui->source_checkBox_useMKVStamps->isChecked()).toBool());
@@ -2358,7 +2380,12 @@ void PreferencesDialog::readCameraSettings(const QString & filePath)
 	settings.beginGroup("MyntEye");
 	_ui->checkbox_stereoMyntEye_rectify->setChecked(settings.value("rectify", _ui->checkbox_stereoMyntEye_rectify->isChecked()).toBool());
 	_ui->checkbox_stereoMyntEye_depth->setChecked(settings.value("depth", _ui->checkbox_stereoMyntEye_depth->isChecked()).toBool());
-	settings.endGroup(); // StereoRealSense2
+	_ui->checkbox_stereoMyntEye_autoExposure->setChecked(settings.value("auto_exposure", _ui->checkbox_stereoMyntEye_autoExposure->isChecked()).toBool());
+	_ui->spinBox_stereoMyntEye_gain->setValue(settings.value("gain", _ui->spinBox_stereoMyntEye_gain->value()).toInt());
+	_ui->spinBox_stereoMyntEye_brightness->setValue(settings.value("brightness", _ui->spinBox_stereoMyntEye_brightness->value()).toInt());
+	_ui->spinBox_stereoMyntEye_contrast->setValue(settings.value("contrast", _ui->spinBox_stereoMyntEye_contrast->value()).toInt());
+	_ui->spinBox_stereoMyntEye_irControl->setValue(settings.value("ir_control", _ui->spinBox_stereoMyntEye_irControl->value()).toInt());
+	settings.endGroup(); // MyntEye
 
 	settings.beginGroup("Images");
 	_ui->source_images_lineEdit_path->setText(settings.value("path", _ui->source_images_lineEdit_path->text()).toString());
@@ -2616,6 +2643,7 @@ void PreferencesDialog::writeGuiSettings(const QString & filePath) const
 	settings.setValue("nochangeGraphView",    _ui->radioButton_nochangeGraphView->isChecked());
 	settings.setValue("odomDisabled",         _ui->checkbox_odomDisabled->isChecked());
 	settings.setValue("odomRegistration",     _ui->odom_registration->currentIndex());
+	settings.setValue("odomF2MGravitySigma",  _ui->odom_f2m_gravitySigma->value());
 	settings.setValue("gtAlign",              _ui->checkbox_groundTruthAlign->isChecked());
 
 	for(int i=0; i<2; ++i)
@@ -2765,6 +2793,9 @@ void PreferencesDialog::writeCameraSettings(const QString & filePath) const
 	settings.endGroup(); // K4W2
 
 	settings.beginGroup("K4A");
+	settings.setValue("rgb_resolution", _ui->comboBox_k4a_rgb_resolution->currentIndex());
+	settings.setValue("framerate", _ui->comboBox_k4a_framerate->currentIndex());
+	settings.setValue("depth_resolution", _ui->comboBox_k4a_depth_resolution->currentIndex());
 	settings.setValue("ir", _ui->checkbox_k4a_irDepth->isChecked());
 	settings.setValue("mkvPath", _ui->lineEdit_k4a_mkv->text());
 	settings.setValue("useMkvStamps", _ui->source_checkBox_useMKVStamps->isChecked());
@@ -2828,8 +2859,13 @@ void PreferencesDialog::writeCameraSettings(const QString & filePath) const
 	settings.endGroup(); // StereoRealSense2
 
 	settings.beginGroup("MyntEye");
-	settings.setValue("rectify", _ui->checkbox_stereoMyntEye_rectify->isChecked());
-	settings.setValue("depth", _ui->checkbox_stereoMyntEye_depth->isChecked());
+	settings.setValue("rectify",       _ui->checkbox_stereoMyntEye_rectify->isChecked());
+	settings.setValue("depth",         _ui->checkbox_stereoMyntEye_depth->isChecked());
+	settings.setValue("auto_exposure", _ui->checkbox_stereoMyntEye_autoExposure->isChecked());
+	settings.setValue("gain",          _ui->spinBox_stereoMyntEye_gain->value());
+	settings.setValue("brightness",    _ui->spinBox_stereoMyntEye_brightness->value());
+	settings.setValue("contrast",      _ui->spinBox_stereoMyntEye_contrast->value());
+	settings.setValue("ir_control",    _ui->spinBox_stereoMyntEye_irControl->value());
 	settings.endGroup(); // MyntEye
 
 	settings.beginGroup("Images");
@@ -4540,8 +4576,8 @@ void PreferencesDialog::updatePredictionPlot()
 				_ui->lineEdit_bayes_predictionLC->text().toStdString().c_str());
 		return;
 	}
-	QVector<float> dataX((values.size()-2)*2 + 1);
-	QVector<float> dataY((values.size()-2)*2 + 1);
+	QVector<qreal> dataX((values.size()-2)*2 + 1);
+	QVector<qreal> dataY((values.size()-2)*2 + 1);
 	double value;
 	double sum = 0;
 	int lvl = 1;
@@ -4992,6 +5028,10 @@ bool PreferencesDialog::isOdomDisabled() const
 int PreferencesDialog::getOdomRegistrationApproach() const
 {
 	return _ui->odom_registration->currentIndex();
+}
+double PreferencesDialog::getOdomF2MGravitySigma() const
+{
+	return _ui->odom_f2m_gravitySigma->value();
 }
 bool PreferencesDialog::isGroundTruthAligned() const
 {
@@ -5606,6 +5646,9 @@ Camera * PreferencesDialog::createCamera(bool useRawImages, bool useColor)
 		}
 		
 		((CameraK4A*)camera)->setIRDepthFormat(_ui->checkbox_k4a_irDepth->isChecked());
+		((CameraK4A*)camera)->setPreferences(_ui->comboBox_k4a_rgb_resolution->currentIndex(),
+						     _ui->comboBox_k4a_framerate->currentIndex(),
+						     _ui->comboBox_k4a_depth_resolution->currentIndex());
 	}
 	else if (driver == kSrcRealSense)
 	{
@@ -5678,6 +5721,19 @@ Camera * PreferencesDialog::createCamera(bool useRawImages, bool useColor)
 				this->getGeneralInputRate(),
 				this->getSourceLocalTransform());
 			((CameraMyntEye*)camera)->publishInterIMU(_ui->checkbox_publishInterIMU->isChecked());
+			if(_ui->checkbox_stereoMyntEye_autoExposure->isChecked())
+			{
+				((CameraMyntEye*)camera)->setAutoExposure();
+			}
+			else
+			{
+				((CameraMyntEye*)camera)->setManualExposure(
+						_ui->spinBox_stereoMyntEye_gain->value(),
+						_ui->spinBox_stereoMyntEye_brightness->value(),
+						_ui->spinBox_stereoMyntEye_contrast->value());
+			}
+			((CameraMyntEye*)camera)->setIrControl(
+					_ui->spinBox_stereoMyntEye_irControl->value());
 		}
 	}
 	else if(driver == kSrcRGBDImages)
