@@ -105,11 +105,15 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
           trackInfo.covariance = cv::Mat::eye(6,6,CV_64FC1)*9999.0;
      }
 
+     UDEBUG("output=%s", output.prettyPrint().c_str());
+
      if (!output.isNull()) {   // Set words and reference frame.
           output = motionSinceLastFrame.inverse() * output;
           if (trackInfo.keyFrame) {  // Keyframe check
                lastFramePose_.setNull();
-          } 
+          } else {
+               lastFramePose_.setNull();
+          }
      } else if (!trackInfo.rejectedMsg.empty()) {
           UWARN("Registration failed: \"%s\"", trackInfo.rejectedMsg.c_str());
      }

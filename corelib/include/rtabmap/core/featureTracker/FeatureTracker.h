@@ -104,6 +104,9 @@ public:
 
 private:
 	std::vector<cv::Point3f> generateKeyPoints3D(const SensorData & _data, const std::vector<cv::KeyPoint> & _keyPoints) const;
+	std::vector<cv::Point3f> points2NormalizedPlane(const std::vector<cv::Point2f> & _points, const CameraModel & _cameraModel) const;
+	std::vector<cv::Point2f> points2VirtualImage(const std::vector<cv::Point3f> & _points) const;
+	void rejectOutlierWithFundationMatrix(const std::vector<cv::Point2f> & _cornersFrom, const std::vector<cv::Point2f> & _cornersTo, std::vector<unsigned char> & _status) const;
 	inline float distanceL2(const cv::Point2f & pt1, const cv::Point2f & pt2) const;
 	void displayTracker(int _n, ...) const;
 
@@ -124,6 +127,8 @@ private:
 	int flowIterations_;
 	float flowEps_;
 	int flowMaxLevel_;
+	bool cullByFundationMatrix_;
+	float fundationPixelError_;
 	int minInliers_;
 	int pnpIterations_;
 	float pnpReprojError_;

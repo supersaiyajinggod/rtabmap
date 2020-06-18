@@ -51,7 +51,7 @@ private:
     //private variable
     Transform lastFramePose_;
     Signature lastFrame_;
-	ParametersMap parameters_;
+	  ParametersMap parameters_;
 
     FeatureTracker *featureTracker_;
 

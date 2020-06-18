@@ -571,6 +571,8 @@ class RTABMAP_EXP Parameters
     RTABMAP_PARAM(OdomVISFS, FlowIterations,        int,    30,     "Termination criteria of the max interation times");
     RTABMAP_PARAM(OdomVISFS, FlowEps,               float,  0.01,   "Termination criteria of the search window moves by less than criteria.epsilon");
     RTABMAP_PARAM(OdomVISFS, FlowMaxLevel,          int,    3,      "Maximal pyramid level number; if set to 0, pyramids are not used (single level)");
+    RTABMAP_PARAM(OdomVISFS, CullByFundationMatrix,  bool,  false,  "Use fundation matrix to cull out the outliers in the result of feature match.");
+    RTABMAP_PARAM(OdomVISFS, FundationPixelError,   float,  1.0,    "Threshold of fundation matrix calculate error.");
     RTABMAP_PARAM(OdomVISFS, MinInliers,            int,    12,     "Minimal inliers between two images.");
     RTABMAP_PARAM(OdomVISFS, PnPIterations,         int,    100,    "Maximal interation times in ransac.");
     RTABMAP_PARAM(OdomVISFS, PnPReprojError,        float,  2,      "PnP reprojection error.");

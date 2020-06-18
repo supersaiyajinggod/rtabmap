@@ -51,6 +51,8 @@ FeatureTracker::FeatureTracker(const ParametersMap & _parameters) :
 	flowIterations_(Parameters::defaultOdomVISFSFlowIterations()),
 	flowEps_(Parameters::defaultOdomVISFSFlowEps()),
 	flowMaxLevel_(Parameters::defaultOdomVISFSFlowMaxLevel()),
+	cullByFundationMatrix_(Parameters::defaultOdomVISFSCullByFundationMatrix()),
+	fundationPixelError_(Parameters::defaultOdomVISFSFundationPixelError()),
 	minInliers_(Parameters::defaultOdomVISFSMinInliers()),
 	pnpIterations_(Parameters::defaultOdomVISFSPnPIterations()),
 	pnpReprojError_(Parameters::defaultOdomVISFSPnPReprojError()),
@@ -70,6 +72,8 @@ FeatureTracker::FeatureTracker(const ParametersMap & _parameters) :
 	Parameters::parse(parameters_, Parameters::kOdomVISFSMinDepth(), minDepth_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSFlowWinSize(), flowWinSize_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSFlowMaxLevel(), flowMaxLevel_);
+	Parameters::parse(parameters_, Parameters::kOdomVISFSCullByFundationMatrix(), cullByFundationMatrix_);
+	Parameters::parse(parameters_, Parameters::kOdomVISFSFundationPixelError(), fundationPixelError_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSFlowIterations(), flowIterations_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSFlowEps(), flowEps_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSMinInliers(), minInliers_);
@@ -93,6 +97,56 @@ std::vector<cv::Point3f> FeatureTracker::generateKeyPoints3D(const SensorData & 
 	return keyPoints3D;
 }
 
+std::vector<cv::Point3f> FeatureTracker::points2NormalizedPlane(const std::vector<cv::Point2f> & _points, const CameraModel & _cameraModel) const {
+	const float invK11 = 1 / static_cast<float>(_cameraModel.fx());
+	const float invK13 = -1.f * static_cast<float>(_cameraModel.cx()) / static_cast<float>(_cameraModel.fx());
+	const float invK22 = 1 / static_cast<float>(_cameraModel.fy());
+	const float invK23 = -1.f * static_cast<float>(_cameraModel.cy()) / static_cast<float>(_cameraModel.fy());
+
+	std::vector<cv::Point3f> pointsInNormalizedPlane;
+	for (auto point : _points) {
+		cv::Point3f pt;
+		pt.x = invK11 * point.x + invK13;
+		pt.y = invK22 * point.y + invK23;
+		pt.z = 1.f;
+		pointsInNormalizedPlane.push_back(pt);
+	}
+
+	return pointsInNormalizedPlane;
+}
+
+std::vector<cv::Point2f> FeatureTracker::points2VirtualImage(const std::vector<cv::Point3f> & _points) const {
+	const float focalLength = 532.f;
+	const float halfCol = 320.f;
+	const float halfRow = 240.f;
+	std::vector<cv::Point2f> virtualCorners(_points.size());
+
+	for (std::size_t i = 0; i < _points.size(); ++i) {
+		cv::Point2f pt;
+		pt.x = focalLength * virtualCorners[i].x + halfCol;
+		pt.y = focalLength * virtualCorners[i].y + halfRow;
+		virtualCorners[i] = pt;	
+	}
+	return virtualCorners;
+}
+
+void FeatureTracker::rejectOutlierWithFundationMatrix(const std::vector<cv::Point2f> & _cornersFrom, const std::vector<cv::Point2f> & _cornersTo, std::vector<unsigned char> & _status) const {
+	UASSERT(_cornersFrom.size() == _cornersTo.size());
+
+	std::vector<unsigned char> statusFundationMatrix;
+	cv::findFundamentalMat(_cornersFrom, _cornersTo, cv::FM_RANSAC, static_cast<double>(fundationPixelError_), 0.99, statusFundationMatrix);
+
+	UASSERT(_status.size() == statusFundationMatrix.size());
+	for (std::size_t i = 0; i < _status.size(); ++i) {
+		if (_status[i] && statusFundationMatrix[i]) {
+			_status[i] = 1;
+		} else {
+			_status[i] = 0;
+		}
+	}		
+
+}
+
 inline float FeatureTracker::distanceL2(const cv::Point2f & pt1, const cv::Point2f & pt2) const {
     float dx = pt1.x - pt2.x;
     float dy = pt1.y - pt2.y;
@@ -100,12 +154,12 @@ inline float FeatureTracker::distanceL2(const cv::Point2f & pt1, const cv::Point
 }
 
 void FeatureTracker::displayTracker(int _n, ...) const {
-	UASSERT(_n == 7);
+	UASSERT(_n == 8);
 
 	std::va_list vl;
 	va_start(vl, _n);
 
-	if (_n == 7) {	// Subsequence: ColorImageTo GrayImageFrom, GrayImageTo, cornersFrom, cornersTo, newCornersInTo, status
+	if (_n == 8) {	// Subsequence: ColorImageTo GrayImageFrom, GrayImageTo, cornersFrom, cornersTo, newCornersInTo, status, TrackerInfo
 		// cv::Mat imageToOri;
 		// cv::Mat imageFrom;
 		// cv::Mat imageTo;
@@ -115,16 +169,19 @@ void FeatureTracker::displayTracker(int _n, ...) const {
 		// std::vector<cv::Point2f> newCornersInTo;
 		std::vector<std::vector<cv::Point2f>> cornersContainer;
 		std::vector<unsigned char> status;
+		int isKeyFrame = 0;
 		for (auto i = 0; i < _n; ++i) {
 			if (i <= 2) {
 				cv::Mat tempImage = va_arg(vl, cv::Mat);
 				if (tempImage.channels() !=3 )
 					cv::cvtColor(tempImage, tempImage, CV_GRAY2BGR);
 				imagesContainer.push_back(tempImage);
-			} else if (i > 2 && i < _n - 1) {
+			} else if (i > 2 && i < _n - 2) {
 				cornersContainer.push_back(va_arg(vl, std::vector<cv::Point2f>));
-			} else if (i == _n - 1) {
+			} else if (i == _n - 2) {
 				status = va_arg(vl, std::vector<unsigned char>);
+			} else if (i == _n - 1) {
+				isKeyFrame = va_arg(vl, int);
 			}
 		}
 		va_end(vl);
@@ -135,6 +192,15 @@ void FeatureTracker::displayTracker(int _n, ...) const {
 		cv::Mat top, bottom, fullImage;
 		cv::hconcat(imagesContainer[1], imagesContainer[2], top);
 		cv::hconcat(imagesContainer[1], imagesContainer[2], bottom);
+		if (1 && (isKeyFrame != 0)) {
+			std::string text = "KeyFrame";
+			int baseLine;
+			cv::Size textSize = cv::getTextSize(text, cv::FONT_HERSHEY_COMPLEX, 2, 2, &baseLine);
+			cv::Point textOrigin;
+			textOrigin.x = imagesContainer[2].cols/2 - textSize.width/2 + cols;
+			textOrigin.y = imagesContainer[2].cols/2 - textSize.height/2;
+			cv::putText(top, text, textOrigin, cv::FONT_HERSHEY_COMPLEX, 2, cv::Scalar(0, 255, 255), 2);
+		}
 
 		for (std::size_t i = 0; i < status.size(); ++i) {
 			cv::circle(top, cornersContainer[0][i], 2, cv::Scalar(0, 0, 255), 1);
@@ -322,6 +388,11 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 				status[i] = 0;
 			}
 		}
+	}
+	if (!flowBack_ && cullByFundationMatrix_) {
+		// std::vector<cv::Point2f> virtualCornersFrom = points2VirtualImage(points2NormalizedPlane(cornersFrom, _fromSignature.sensorData().cameraModels()[0]));
+		// std::vector<cv::Point2f> virtualCornersTo = points2VirtualImage(points2NormalizedPlane(cornersTo, _toSignature.sensorData().cameraModels()[0]));
+		rejectOutlierWithFundationMatrix(cornersFrom, cornersTo, status);
 	}
 	UDEBUG("cv::calcOpticalFlowPyrLK() end");
 
@@ -550,18 +621,24 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 	std::vector<cv::Point2f> newCornersInTo;
 	int backUpPointsCount = maxFeatures_ - static_cast<int>(kptsTo.size()); 
 
-	if (allInliers.size() < (0.1 * maxFeatures_) || backUpPointsCount > 0.5 * allInliers.size())
+	if (allInliers.size() < (0.2 * maxFeatures_) || backUpPointsCount > 0.5 * allInliers.size()) {
 		_infoOut->keyFrame = true;
-	// Compute parallax
-	int parallaxNum = static_cast<int>(kptsFrom.size());
-	float parallaxSum = 0.f;
-	for (std::size_t i = 0; i < kptsFrom.size(); ++i) {
-		const float du = kptsFrom[i].pt.x - kptsTo[i].pt.y;
-		const float dv = kptsFrom[i].pt.y - kptsTo[i].pt.y;
-		parallaxSum += std::max(0.f, sqrt(du * du + dv * dv));
+		UDEBUG("KeyFrame condition satisfied!, inliers = %d, maxFeatures_ = %d, 0.1*maxFeatures_ = %f, backUpPointsCount = %d.", allInliers.size(), maxFeatures_, 0.1 * maxFeatures_, backUpPointsCount);
+	} else {
+		// Compute parallax
+		int parallaxNum = static_cast<int>(kptsFrom.size());
+		float parallaxSum = 0.f;
+		for (std::size_t i = 0; i < kptsFrom.size(); ++i) {
+			const float du = kptsFrom[i].pt.x - kptsTo[i].pt.y;
+			const float dv = kptsFrom[i].pt.y - kptsTo[i].pt.y;
+			parallaxSum += std::max(0.f, sqrt(du * du + dv * dv));
+		}
+		if ((parallaxSum / static_cast<float>(parallaxNum)) >= minParallax_) {
+			_infoOut->keyFrame = true;
+			UDEBUG("Keyframe condition satisfied!. parallax!, compute result=%f, minParallax_=%f.", (parallaxSum / static_cast<float>(parallaxNum)),minParallax_);
+		}
 	}
-	if (parallaxSum / static_cast<float>(parallaxNum) >= minParallax_)
-		_infoOut->keyFrame = true;
+		
 
 	if (backUpPointsCount > 0 && !_toSignature.sensorData().imageRaw().empty()) {
 		// Set mask
@@ -603,10 +680,8 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 	_toSignature.sensorData().setFeatures(kptsTo, kptsTo3D, cv::Mat());
 
 	if (displayTracker_) 
-		displayTracker(7, imageToOri, imageFrom, imageTo, cornersFrom, cornersTo, newCornersInTo, status);
+		displayTracker(8, imageToOri, imageFrom, imageTo, cornersFrom, cornersTo, newCornersInTo, status, _infoOut->keyFrame ? 1 : 0);
 
-	UINFO("inliers=%d/%d", _infoOut->inliers, _infoOut->matches);
-	UINFO("transform=%s", transform.prettyPrint().c_str());
 	return transform;
 
 }
