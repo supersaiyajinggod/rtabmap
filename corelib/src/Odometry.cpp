@@ -36,7 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "rtabmap/core/odometry/OdometryLOAM.h"
 #include "rtabmap/core/odometry/OdometryMSCKF.h"
 #include "rtabmap/core/odometry/OdometryVINS.h"
-#include "rtabmap/core/odometry/OdometryVISFS.h"
+#include "rtabmap/core/odometry/OdometryVISFS/OdometryVISFS.h"
 #include "rtabmap/core/OdometryInfo.h"
 #include "rtabmap/core/util3d.h"
 #include "rtabmap/core/util3d_mapping.h"

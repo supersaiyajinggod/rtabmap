@@ -33,6 +33,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "rtabmap/core/Signature.h"
 #include "rtabmap/core/Transform.h"
 #include "rtabmap/core/RegistrationInfo.h"
+#include "rtabmap/core/odometry/OdometryVISFS/FeatureManager.h"
 
 #include <opencv2/opencv.hpp>
 
@@ -95,7 +96,7 @@ public:
 class RTABMAP_EXP FeatureTracker {
 
 public:
-    FeatureTracker(const ParametersMap & _parameters);
+    FeatureTracker(const ParametersMap & _parameters, FeatureManager * _featureManager);
     virtual ~FeatureTracker();
 
 	Transform computeTransformation(const Signature & _fromSignature, const Signature & _toSignature, Transform _guess = Transform::getIdentity(), TrackerInfo * _info = nullptr) const;
@@ -114,6 +115,8 @@ private:
 	const double COVARIANCE_EPSILON = 0.000000001;
 
 	ParametersMap parameters_;
+	FeatureManager * featureManager_;
+	
 	bool force3DoF_;
 	bool displayTracker_;
 	int maxFeatures_;

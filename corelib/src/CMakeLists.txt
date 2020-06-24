@@ -89,9 +89,10 @@ SET(SRC_FILES
     odometry/OdometryLOAM.cpp
     odometry/OdometryMSCKF.cpp
 	odometry/OdometryVINS.cpp
-	odometry/OdometryVISFS.cpp
-	
-	featureTracker/FeatureTracker.cpp
+	odometry/OdometryVISFS/OdometryVISFS.cpp
+	odometry/OdometryVISFS/FeatureTracker.cpp
+	odometry/OdometryVISFS/StateEstimator.cpp
+	odometry/OdometryVISFS/FeatureManager.cpp
 
     IMUThread.cpp
     IMUFilter.cpp

@@ -25,7 +25,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "rtabmap/core/odometry/OdometryVISFS.h"
+#include "rtabmap/core/odometry/OdometryVISFS/OdometryVISFS.h"
 #include "rtabmap/core/OdometryInfo.h"
 #include "rtabmap/core/util3d_transforms.h"
 #include "rtabmap/utilite/UTimer.h"
@@ -34,11 +34,12 @@ namespace rtabmap {
 
 OdometryVISFS::OdometryVISFS(const ParametersMap & _parameters) : Odometry(_parameters) {
      parameters_ = _parameters;
-     featureTracker_ = new FeatureTracker(_parameters);
+     stateEstimator_ = new StateEstimator(parameters_);
+
 }
 
 OdometryVISFS::~OdometryVISFS() {
-     delete featureTracker_;
+     delete stateEstimator_;
 }
 
 void OdometryVISFS::reset(const Transform & _initialPose) {
@@ -68,12 +69,13 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
      Transform motionSinceLastFrame = lastFramePose_.inverse()*this->getPose();
 
      Signature newFrame(_data);
+     featureManager->addSignatrue(newFrame);
+     UINFO("newFrame's id: %d", newFrame.id());
      if (lastFrame_.sensorData().isValid()) {
           // TODO: If set use icp for fake laser scan, do some prepare works.
           // OdometryVISFS
           Signature tmpRefFrame = lastFrame_;
-          output = featureTracker_->computeTransformationMod(tmpRefFrame, newFrame, _guess.isNull()?motionSinceLastFrame*_guess:Transform(), &trackInfo);
-     
+          output = featureTracker->computeTransformationMod(tmpRefFrame, newFrame, _guess.isNull()?motionSinceLastFrame*_guess:Transform(), &trackInfo);
           // If OdometryVISFS failed, use F2M strategy.
 
           if (output.isNull()) {
@@ -84,7 +86,7 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
 			newFrame.setWords3(std::multimap<int, cv::Point3f>());
 			newFrame.setWordsDescriptors(std::multimap<int, cv::Mat>());
                // Retry the calculate again with no guess.
-               output = featureTracker_->computeTransformationMod(tmpRefFrame, newFrame, Transform(), &trackInfo);
+               output = featureTracker->computeTransformationMod(tmpRefFrame, newFrame, Transform(), &trackInfo);
           }
 
           if (_info) {

@@ -25,39 +25,33 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef ODOMETRYVISFS_H_
-#define ODOMETRYVISFS_H_
-
-#include "rtabmap/core/Odometry.h"
-#include "rtabmap/core/Signature.h"
-#include "rtabmap/core/featureTracker/FeatureTracker.h"
+#include "rtabmap/core/odometry/OdometryVISFS/StateEstimator.h"
 
 namespace rtabmap {
+    StateEstimator::StateEstimator(const ParametersMap & _parameters) {
+        parameters_ = _parameters;
+        featureManager_ = new FeatureManager(parameters_);
+        featureTracker_ = new FeatureTracker(parameters_, featureManager_);
+        initialize();
+    }
 
-class RTABMAP_EXP OdometryVISFS : public Odometry {
-public:
-    OdometryVISFS(const rtabmap::ParametersMap & _parameters = rtabmap::ParametersMap());
-    virtual ~OdometryVISFS();
+    StateEstimator::~StateEstimator() {
+        if (featureTracker_ != nullptr)
+            delete featureTracker_;
+        if (featureManager_ != nullptr)
+            delete featureManager_;
+    }
 
-    virtual void reset(const Transform & _initialPose = Transform::getIdentity());
-    virtual Odometry::Type getType() {return Odometry::kTypeVISFS;}
-    virtual bool canProcessRawImage() const {return true;}
-    virtual bool canProcessIMU() const {return true;}
+    void StateEstimator::initialize() {
+        boost::lock_guard<boost::mutex> lock(mutexProcess_);
+        threadEstimateState_ =  boost::thread(&StateEstimator::estimateState, this);
+    }
 
-private:
-    virtual Transform computeTransform(SensorData & _data, const Transform & _guess = Transform(), OdometryInfo * _info = 0);
-
-private:
-    //private variable
-    Transform lastFramePose_;
-    Signature lastFrame_;
-	  ParametersMap parameters_;
-
-    FeatureTracker *featureTracker_;
-
-};
-
+    void StateEstimator::estimateState() {
+        while(1) {
+            boost::this_thread::sleep(boost::get_system_time() + boost::posix_time::seconds(1));
+            UINFO("estimateState running!");
+        }
+    }
 
 }
-
-#endif /*ODOMETRYVISFS_H_ */

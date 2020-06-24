@@ -27,7 +27,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <cstdarg>
 
-#include "rtabmap/core/featureTracker/FeatureTracker.h"
+#include "rtabmap/core/odometry/OdometryVISFS/FeatureTracker.h"
 #include "rtabmap/core/util3d_features.h"
 #include "rtabmap/core/util3d_motion_estimation.h"
 #include "rtabmap/core/util3d_transforms.h"
@@ -37,7 +37,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace rtabmap {
 
-FeatureTracker::FeatureTracker(const ParametersMap & _parameters) : 
+FeatureTracker::FeatureTracker(const ParametersMap & _parameters, FeatureManager * _featureManager) : 
+	featureManager_(_featureManager),
 	force3DoF_(Parameters::defaultRegForce3DoF()),
 	displayTracker_(Parameters::defaultOdomVISFSDisplayTracker()),
 	maxFeatures_(Parameters::defaultOdomVISFSMaxFeatures()),
@@ -284,8 +285,6 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 	cv::Mat imageFrom = _fromSignature.sensorData().imageRaw();
 	cv::Mat imageTo = _toSignature.sensorData().imageRaw();
 	cv::Mat imageToOri = _toSignature.sensorData().imageRaw();
-	// if (displayTracker_)
-	// 	cv::Mat imageToOri = _toSignature.sensorData().imageRaw();
 
 	if (imageFrom.channels() > 1) {
 		cv::Mat tmp;
@@ -310,7 +309,7 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 			kptsFrom = _fromSignature.sensorData().keypoints();
 			UDEBUG("Get key points from the former signature's keypoints: %d.", static_cast<int>(kptsFrom.size()));
 		}
-	} else {		// Process the former extracted keypoints.
+	} else {		// Process the former extracted keypoints. //////
 		kptsFrom.resize(_fromSignature.getWords().size());
 		orignalWordsFromIds.resize(_fromSignature.getWords().size());
 		int index = 0;
@@ -345,6 +344,7 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 		kptsFrom3D = _fromSignature.sensorData().keypoints3D();
 	} else {
 		kptsFrom3D = generateKeyPoints3D(_fromSignature.sensorData(), kptsFrom);
+		// add features
 	}
 	UDEBUG("Size of kptsFrom3D = %d", static_cast<int>(kptsFrom3D.size()));
 
@@ -598,6 +598,8 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 						cpyWordsTo3.find(iter->first)->second = util3d::transformPoint(iter->second, invT);
 				}
 				_toSignature.setWords3(cpyWordsTo3);
+
+				//update Feature, update _toSignature.getWords3() _toSignature.getWords()
 			} else {
 				transform.setNull();
 			}
@@ -655,6 +657,8 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 			newKpt.push_back(cv::KeyPoint(kpt2f, 1.f));
 		}
 		newkpt3D = generateKeyPoints3D(_toSignature.sensorData(), newKpt);
+
+		//add Feature, newKpt, newkpt3D.
 
 		UASSERT(newKpt.size() == newkpt3D.size());
 		for (std::size_t i = 0; i < newKpt.size(); ++i) {

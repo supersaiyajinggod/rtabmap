@@ -96,6 +96,7 @@ public:
 
 	void setSaved(bool saved) {_saved = saved;}
 	void setModified(bool modified) {_modified = modified; _linksModified = modified;}
+	void setId(std::size_t id) {_id = id;}
 
 	const std::multimap<int, Link> & getLinks() const {return _links;}
 	bool isSaved() const {return _saved;}
