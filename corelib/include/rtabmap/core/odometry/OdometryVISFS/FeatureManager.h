@@ -32,11 +32,61 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "rtabmap/core/Parameters.h"
 #include "rtabmap/core/Signature.h"
 #include "rtabmap/core/Transform.h"
+#include "rtabmap/core/RegistrationInfo.h"
 
 #include <opencv2/opencv.hpp>
 #include <boost/thread.hpp>
 
 namespace rtabmap {
+
+class RTABMAP_EXP TrackerInfo {
+public:
+    TrackerInfo() :
+	totalTime(0.),
+	inliers(0),
+	inliersMeanDistance(0.f),
+	inliersDistribution(0.f),
+	matches(0),
+    matchesInImage(0),
+	signatureId(0) {
+		deltaT = Transform::getIdentity();
+		globalPose = Transform::getIdentity();
+	}
+
+	RegistrationInfo copyWithoutData() const {
+		RegistrationInfo output;
+		output.totalTime = totalTime;
+		output.covariance = covariance.clone();
+		output.rejectedMsg = rejectedMsg;
+		output.inliers = inliers;
+		output.inliersMeanDistance = inliersMeanDistance;
+		output.inliersDistribution = inliersDistribution;
+		output.matches = matches;
+		output.icpInliersRatio = 0.f;
+		output.icpTranslation = 0.f;
+		output.icpRotation = 0.f;
+		output.icpStructuralComplexity = 0.f;
+		output.icpStructuralDistribution = 0.f;
+		output.icpCorrespondences = 0;
+		return output;
+	}
+
+	cv::Mat covariance;
+	std::string rejectedMsg;
+	double totalTime;
+	int inliers;
+	float inliersMeanDistance;
+	float inliersDistribution;
+	std::vector<int> inliersIDs;
+	int matches;
+    int matchesInImage;
+	std::size_t signatureId;
+	Transform deltaT;
+	Transform globalPose;
+	std::vector<int> matchesIDs;
+    std::vector<int> matchesInImageIDs;
+	std::vector<int> projectedIDs;
+};
 
 class RTABMAP_EXP FeatureStatusOfEachFrame {
 public:
@@ -83,10 +133,12 @@ public:
         OPTIMIZED       = 3
     };
 
-    std::size_t getTrackCnt() {return featrueStatusInFrames_.size();}
+    std::size_t getTrackedCnt() {return featrueStatusInFrames_.size();}
     std::size_t getId() {return featrueId_;}
     std::size_t getStartFrame() {return startFrameId_;}
     double getEstimatedDepth() {return estimatedDepth_;}
+    cv::Point3f getEstimatedPose() {return PoseTwc_;}
+    void setEstimatePose(const cv::Point3f & _pose) {PoseTwc_ = _pose;}
     int getSolveState() {return solveState_;}
     void setSolveState(const enum eSolveState & _solveState) {solveState_ = _solveState;}
 
@@ -96,24 +148,39 @@ private:
     const std::size_t featrueId_;
     std::size_t startFrameId_;
     double estimatedDepth_;
+    cv::Point3f PoseTwc_;
     int solveState_;    // 0 haven't solve, 1 get depth from depth image, 2 calculate depth with former frame, 3 optical depth with several frames.
 };
 
 class RTABMAP_EXP FeatureManager {
 public:
     FeatureManager(const ParametersMap & _parameters);
-    void addSignatrue(Signature & _signature);
-    void addFeature(const std::vector<cv::KeyPoint> & _kpt, const std::vector<cv::Point3f> & _kpt3d, std::multimap<int, cv::KeyPoint> & _words, std::multimap<int, cv::Point3f> & _words3d);
+    std::size_t getSignatureId();
+    std::size_t addSignatrue(const Signature & _signature);
+    std::vector<std::size_t> addFeature(const std::vector<cv::KeyPoint> & _kpt, const std::vector<cv::Point3f> & _kpt3d, std::multimap<int, cv::KeyPoint> & _words, std::multimap<int, cv::Point3f> & _words3d);
+    std::vector<std::size_t> updateFeature(const std::multimap<int, cv::KeyPoint> & _words, const std::multimap<int, cv::Point3f> & _words3d);
+    bool checkParallax(const TrackerInfo & _trackInfo); //True: keyframe, False: Not keyframe.
+    void cleanFeatureAndSignature(bool _keyFrame);
+    void depthRecovery(const std::map<std::size_t, Transform> & _framePoseInWorld);
+    bool hasSignature(const std::size_t _id);
+    bool hasFeature(const std::size_t _id);
+    Signature getLastSignature();
 
-    std::size_t featureId_;
-    std::size_t signatureId_;
     std::list<Featrue> featrues_;
     std::list<Signature> signatures_;
 
 private:
+    bool triangulateByTwoFrames(const Transform & _pose0, const Transform & _pose1, const cv::Point2f & _uv0, const cv::Point2f & _uv1, cv::Point3f & _pointInWord, cv::Point3f & _pointInPose0, cv::Point3f & _pointInPose1);
+
+    int optimizationWindowSize_;
+    int maxFeature_;
+    float minParallax_;
     ParametersMap parameters_;
     boost::mutex mutexFeatureProcess_;
-    
+
+    std::size_t featureId_;
+    std::size_t signatureId_;
+   
 };
 
 }

@@ -45,7 +45,6 @@ FeatureTracker::FeatureTracker(const ParametersMap & _parameters, FeatureManager
 	qualityLevel_(Parameters::defaultGFTTQualityLevel()),
 	minDistance_(Parameters::defaultGFTTMinDistance()),
 	flowBack_(Parameters::defaultOdomVISFSFlowBack()),
-	minParallax_(Parameters::defaultOdomVISFSMinParallax()),
 	maxDepth_(Parameters::defaultOdomVISFSMaxDepth()),
 	minDepth_(Parameters::defaultOdomVISFSMinDepth()),
 	flowWinSize_(Parameters::defaultOdomVISFSFlowWinSize()),
@@ -68,7 +67,6 @@ FeatureTracker::FeatureTracker(const ParametersMap & _parameters, FeatureManager
 	Parameters::parse(parameters_, Parameters::kGFTTQualityLevel(), qualityLevel_);
 	Parameters::parse(parameters_, Parameters::kGFTTMinDistance(), minDistance_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSFlowBack(), flowBack_);
-	Parameters::parse(parameters_, Parameters::kOdomVISFSMinParallax(), minParallax_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSMaxDepth(), maxDepth_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSMinDepth(), minDepth_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSFlowWinSize(), flowWinSize_);
@@ -323,18 +321,11 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 			++index;
 		}
 		if (!allWordsUniques) {
-			UDEBUG("IDs are not unique, IDs will be regenerated!");
-			orignalWordsFromIds.clear();			
+			UINFO("IDs are not unique, IDs will be regenerated!");
+			// orignalWordsFromIds.clear();			
 		}
 		UDEBUG("Get key points from the former signature's words2d: %d.", static_cast<int>(kptsFrom.size()));
 	}
-
-	std::multimap<int, cv::KeyPoint> wordsFrom;
-	std::multimap<int, cv::KeyPoint> wordsTo;
-	std::multimap<int, cv::Point3f> words3From;
-	std::multimap<int, cv::Point3f> words3To;
-	std::multimap<int, cv::Mat> wordsDescFrom;
-	std::multimap<int, cv::Mat> wordsDescTo;
 
 	// Generate the from signature key points in 3d.
 	std::vector<cv::Point3f> kptsFrom3D;
@@ -344,9 +335,15 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 		kptsFrom3D = _fromSignature.sensorData().keypoints3D();
 	} else {
 		kptsFrom3D = generateKeyPoints3D(_fromSignature.sensorData(), kptsFrom);
-		// add features
 	}
 	UDEBUG("Size of kptsFrom3D = %d", static_cast<int>(kptsFrom3D.size()));
+
+	std::multimap<int, cv::KeyPoint> wordsFrom;
+	std::multimap<int, cv::KeyPoint> wordsTo;
+	std::multimap<int, cv::Point3f> words3From;
+	std::multimap<int, cv::Point3f> words3To;
+	std::multimap<int, cv::Mat> wordsDescFrom;
+	std::multimap<int, cv::Mat> wordsDescTo;
 
 	// Do a initial estimate of the to signature key points's pixel positon.
 	std::vector<cv::Point2f> cornersFrom;
@@ -426,17 +423,29 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 	UASSERT(kptsFrom.size() == kptsFrom3DKept.size());
 	UASSERT(kptsFrom.size() == kptsTo.size());
 	UASSERT(kptsTo3D.size() == 0 || kptsTo.size() == kptsTo3D.size());
-	for (size_t i = 0; i < kptsFrom3DKept.size(); ++i) {
-		int id = orignalWordsFromIds.size()?orignalWordsFromIds[i] : static_cast<int>(i);
-		wordsFrom.insert(std::pair<int, cv::KeyPoint>(id, kptsFrom[i]));
-		words3From.insert(std::pair<int, cv::Point3f>(id, kptsFrom3DKept[i]));
-		wordsTo.insert(std::pair<int, cv::KeyPoint>(id, kptsTo[i]));
-		words3To.insert(std::pair<int, cv::Point3f>(id, kptsTo3D[i]));
+
+	if (_fromSignature.getWords().empty() && _fromSignature.sensorData().keypoints3D().empty()) {
+		auto wordsId = featureManager_->addFeature(kptsFrom, kptsFrom3D, wordsFrom, words3From);
+		for (std::size_t i = 0; i < wordsId.size(); ++i) {
+			wordsTo.insert(std::pair<int, cv::KeyPoint>(wordsId[i], kptsTo[i]));
+			words3To.insert(std::pair<int, cv::Point3f>(wordsId[i], kptsTo3D[i]));
+		}
+	} else {
+		// update words still tracking.
+		for (std::size_t i = 0; i < kptsFrom3DKept.size(); ++i) {
+			int id = orignalWordsFromIds.size()?orignalWordsFromIds[i] : static_cast<int>(i);
+			wordsFrom.insert(std::pair<int, cv::KeyPoint>(id, kptsFrom[i]));
+			words3From.insert(std::pair<int, cv::Point3f>(id, kptsFrom3DKept[i]));
+			wordsTo.insert(std::pair<int, cv::KeyPoint>(id, kptsTo[i]));
+			words3To.insert(std::pair<int, cv::Point3f>(id, kptsTo3D[i]));
+		}
 	}
+
 	_fromSignature.setWords(wordsFrom);
 	_fromSignature.setWords3(words3From);
 	_toSignature.setWords(wordsTo);
 	_toSignature.setWords3(words3To);
+	_infoOut->matchesInImageIDs = orignalWordsFromIds;
 
 	// Motion estimation, 3D->2D PnP.
 	Transform transform;
@@ -598,13 +607,11 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 						cpyWordsTo3.find(iter->first)->second = util3d::transformPoint(iter->second, invT);
 				}
 				_toSignature.setWords3(cpyWordsTo3);
-
-				//update Feature, update _toSignature.getWords3() _toSignature.getWords()
 			} else {
 				transform.setNull();
 			}
 		}
-
+		//update Feature, update _toSignature.getWords3() _toSignature.getWords()
 		_infoOut->inliersIDs = allInliers;
 		_infoOut->matchesIDs = allMatches;
 	} else if(_toSignature.sensorData().isValid()) {
@@ -616,32 +623,13 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 
 	_infoOut->inliers = static_cast<int>(allInliers.size());
 	_infoOut->matches = static_cast<int>(allMatches.size());
+	_infoOut->matchesInImage = static_cast<int>(kptsTo.size());
 	_infoOut->rejectedMsg = msg;
 	_infoOut->covariance = covariance;
 
 	// Check keyframe, research new feature, set feature, set words.
 	std::vector<cv::Point2f> newCornersInTo;
-	int backUpPointsCount = maxFeatures_ - static_cast<int>(kptsTo.size()); 
-
-	if (allInliers.size() < (0.2 * maxFeatures_) || backUpPointsCount > 0.5 * allInliers.size()) {
-		_infoOut->keyFrame = true;
-		UDEBUG("KeyFrame condition satisfied!, inliers = %d, maxFeatures_ = %d, 0.1*maxFeatures_ = %f, backUpPointsCount = %d.", allInliers.size(), maxFeatures_, 0.1 * maxFeatures_, backUpPointsCount);
-	} else {
-		// Compute parallax
-		int parallaxNum = static_cast<int>(kptsFrom.size());
-		float parallaxSum = 0.f;
-		for (std::size_t i = 0; i < kptsFrom.size(); ++i) {
-			const float du = kptsFrom[i].pt.x - kptsTo[i].pt.y;
-			const float dv = kptsFrom[i].pt.y - kptsTo[i].pt.y;
-			parallaxSum += std::max(0.f, sqrt(du * du + dv * dv));
-		}
-		if ((parallaxSum / static_cast<float>(parallaxNum)) >= minParallax_) {
-			_infoOut->keyFrame = true;
-			UDEBUG("Keyframe condition satisfied!. parallax!, compute result=%f, minParallax_=%f.", (parallaxSum / static_cast<float>(parallaxNum)),minParallax_);
-		}
-	}
-		
-
+	int backUpPointsCount = maxFeatures_ - _infoOut->matchesInImage; 
 	if (backUpPointsCount > 0 && !_toSignature.sensorData().imageRaw().empty()) {
 		// Set mask
 		cv::Mat mask = cv::Mat(imageTo.rows, imageTo.cols, CV_8UC1, cv::Scalar(255));
@@ -658,21 +646,27 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 		}
 		newkpt3D = generateKeyPoints3D(_toSignature.sensorData(), newKpt);
 
-		//add Feature, newKpt, newkpt3D.
-
+		//Add new feature
 		UASSERT(newKpt.size() == newkpt3D.size());
 		for (std::size_t i = 0; i < newKpt.size(); ++i) {
 			kptsTo.push_back(newKpt[i]);
 			kptsTo3D.push_back(newkpt3D[i]);
 		}
-
-		UASSERT(kptsTo3D.size() == 0 || kptsTo.size() == kptsTo3D.size());
+		std::multimap<int, cv::KeyPoint> newWordsTo;
+		std::multimap<int, cv::Point3f> newWords3To;
+		featureManager_->addFeature(newKpt, newkpt3D, newWordsTo, newWords3To);
+	
 		wordsTo.clear();
 		words3To.clear();
-		for (std::size_t i = 0; i < kptsTo.size(); ++i) {
-			int id = static_cast<int>(i);
-			wordsTo.insert(std::pair<int, cv::KeyPoint>(id, kptsTo[i]));
-			words3To.insert(std::pair<int, cv::Point3f>(id, kptsTo3D[i]));
+		wordsTo = _toSignature.getWords();
+		words3To = _toSignature.getWords3();
+		// Copy newWordsTo, newWords3To to wordsTo and words3To.
+		UASSERT(wordsTo.size() == words3To.size());
+		for (auto pos = newWordsTo.begin(); pos != newWordsTo.end(); ++pos) {
+			wordsTo.insert(*pos);
+		}
+		for (auto pos = newWords3To.begin(); pos != newWords3To.end(); ++pos) {
+			words3To.insert(*pos);
 		}
 		_toSignature.setWords(wordsTo);
 		_toSignature.setWords3(words3To);
@@ -684,7 +678,7 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 	_toSignature.sensorData().setFeatures(kptsTo, kptsTo3D, cv::Mat());
 
 	if (displayTracker_) 
-		displayTracker(8, imageToOri, imageFrom, imageTo, cornersFrom, cornersTo, newCornersInTo, status, _infoOut->keyFrame ? 1 : 0);
+		displayTracker(8, imageToOri, imageFrom, imageTo, cornersFrom, cornersTo, newCornersInTo, status, 0);
 
 	return transform;
 

@@ -28,30 +28,66 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "rtabmap/core/odometry/OdometryVISFS/StateEstimator.h"
 
 namespace rtabmap {
-    StateEstimator::StateEstimator(const ParametersMap & _parameters) {
-        parameters_ = _parameters;
-        featureManager_ = new FeatureManager(parameters_);
-        featureTracker_ = new FeatureTracker(parameters_, featureManager_);
-        initialize();
-    }
+StateEstimator::StateEstimator(const ParametersMap & _parameters) {
+    parameters_ = _parameters;
+    featureManager_ = new FeatureManager(parameters_);
+    featureTracker_ = new FeatureTracker(parameters_, featureManager_);
+    initialize();
+}
 
-    StateEstimator::~StateEstimator() {
-        if (featureTracker_ != nullptr)
-            delete featureTracker_;
-        if (featureManager_ != nullptr)
-            delete featureManager_;
-    }
+StateEstimator::~StateEstimator() {
+    if (featureTracker_ != nullptr)
+        delete featureTracker_;
+    if (featureManager_ != nullptr)
+        delete featureManager_;
+}
 
-    void StateEstimator::initialize() {
-        boost::lock_guard<boost::mutex> lock(mutexProcess_);
-        threadEstimateState_ =  boost::thread(&StateEstimator::estimateState, this);
-    }
+void StateEstimator::initialize() {
+    boost::lock_guard<boost::mutex> lock(mutexProcess_);
+    threadEstimateState_ =  boost::thread(&StateEstimator::estimateState, this);
+}
 
-    void StateEstimator::estimateState() {
-        while(1) {
-            boost::this_thread::sleep(boost::get_system_time() + boost::posix_time::seconds(1));
+void StateEstimator::estimateState() {
+    while(1) {
+        UINFO("should running here!");
+        TrackerInfo trackInfo;
+        if (!trackInfoBuf_.empty()) {
+            {
+                boost::lock_guard<boost::mutex> lock(mutexDataReadWrite_);
+                trackInfo = trackInfoBuf_.front();
+                trackInfoBuf_.pop();
+            }
+            trackInfoState_.insert(std::pair<std::size_t, TrackerInfo>(trackInfo.signatureId, trackInfo));
+            framePoseInWorld_.insert(std::pair<std::size_t, Transform>(trackInfo.signatureId, trackInfo.globalPose));            
+
+            // Process, checkParallax, triangular map point, update the result to feature manager buf and
+            //  remember the feature tracker should modify to get the last frame from the feature manager buf.
+
+            bool keyFrame = featureManager_->checkParallax(trackInfo);
+
+            featureManager_->cleanFeatureAndSignature(keyFrame);
+            for (auto it = trackInfoState_.begin(); it != trackInfoState_.end();) {
+                std::size_t id = it->first;
+                if (!featureManager_->hasSignature(id)) {
+                    it = trackInfoState_.erase(it);
+                    framePoseInWorld_.erase(framePoseInWorld_.find(id));
+                } else {
+                    ++it;
+                }
+            }
+
+            featureManager_->depthRecovery(framePoseInWorld_);
             UINFO("estimateState running!");
         }
+        UINFO("estimateThread running!");
+
+        boost::this_thread::sleep(boost::get_system_time() + boost::posix_time::milliseconds(5));
     }
+}
+
+void StateEstimator::updateTrackState(const TrackerInfo & _trackInfo) {
+    boost::lock_guard<boost::mutex> lock(mutexDataReadWrite_);
+    trackInfoBuf_.push(_trackInfo);
+}
 
 }

@@ -69,18 +69,18 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
      Transform motionSinceLastFrame = lastFramePose_.inverse()*this->getPose();
 
      Signature newFrame(_data);
-     featureManager->addSignatrue(newFrame);
-     UINFO("newFrame's id: %d", newFrame.id());
      if (lastFrame_.sensorData().isValid()) {
           // TODO: If set use icp for fake laser scan, do some prepare works.
           // OdometryVISFS
-          Signature tmpRefFrame = lastFrame_;
+          // Signature tmpRefFrame = lastFrame_;
+          Signature tmpRefFrame = featureManager->getLastSignature();
           output = featureTracker->computeTransformationMod(tmpRefFrame, newFrame, _guess.isNull()?motionSinceLastFrame*_guess:Transform(), &trackInfo);
           // If OdometryVISFS failed, use F2M strategy.
 
           if (output.isNull()) {
                UINFO("Trial failed. ~~~!!!~~~");
-               tmpRefFrame = lastFrame_;
+               // tmpRefFrame = lastFrame_;
+               tmpRefFrame = featureManager->getLastSignature();
 			// Reset matches, but keep already extracted features in newFrame.sensorData()
 			newFrame.setWords(std::multimap<int, cv::KeyPoint>());
 			newFrame.setWords3(std::multimap<int, cv::Point3f>());
@@ -111,11 +111,9 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
 
      if (!output.isNull()) {   // Set words and reference frame.
           output = motionSinceLastFrame.inverse() * output;
-          if (trackInfo.keyFrame) {  // Keyframe check
-               lastFramePose_.setNull();
-          } else {
-               lastFramePose_.setNull();
-          }
+          trackInfo.deltaT = output;
+          trackInfo.globalPose = lastFramePose_ * output;
+          lastFramePose_.setNull();
      } else if (!trackInfo.rejectedMsg.empty()) {
           UWARN("Registration failed: \"%s\"", trackInfo.rejectedMsg.c_str());
      }
@@ -126,13 +124,21 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
           _info->type = kTypeVISFS;
           output.isNull() ? _info->lost = true : _info->lost = false; 
           _info->features = newFrame.sensorData().keypoints().size();
-          _info->keyFrameAdded = trackInfo.keyFrame;
+          // _info->keyFrameAdded = trackInfo.keyFrame;
           _info->reg = trackInfo.copyWithoutData();
      }
 
+     std::size_t signatureId =  featureManager->getSignatureId();
+     _data.setId(signatureId);
+     featureManager->addSignatrue(_data);
+     trackInfo.signatureId = signatureId;
+     trackInfo.totalTime = timer.elapsed();
+
 	UINFO("Odom update time = %fs lost=%s inliers=%d, ref frame corners=%d, transform accepted=%s",
-		timer.elapsed(), output.isNull() ? "true" : "false", static_cast<int>(trackInfo.inliers),
+		trackInfo.totalTime, output.isNull() ? "true" : "false", static_cast<int>(trackInfo.inliers),
 		static_cast<int>(newFrame.sensorData().keypoints().size()), !output.isNull() ? "true" : "false");
+
+     stateEstimator_->updateTrackState(trackInfo);
 
 	return output;
 }

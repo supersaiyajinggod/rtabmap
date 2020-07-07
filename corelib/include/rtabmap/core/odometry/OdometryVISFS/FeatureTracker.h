@@ -32,66 +32,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "rtabmap/core/Parameters.h"
 #include "rtabmap/core/Signature.h"
 #include "rtabmap/core/Transform.h"
-#include "rtabmap/core/RegistrationInfo.h"
 #include "rtabmap/core/odometry/OdometryVISFS/FeatureManager.h"
 
 #include <opencv2/opencv.hpp>
 
 namespace rtabmap {
-
-class RTABMAP_EXP TrackerInfo {
-public:
-    TrackerInfo() :
-	totalTime(0.),
-	keyFrame(false),
-	inliers(0),
-	inliersMeanDistance(0.f),
-	inliersDistribution(0.f),
-	matches(0) {}
-
-	// TrackerInfo copyWithoutData() const {
-	// 	TrackerInfo output;
-	// 	output.totalTime = totalTime;
-	// 	output.covariance = covariance.clone();
-	// 	output.rejectedMsg = rejectedMsg;
-	// 	output.keyFrame = keyFrame;
-	// 	output.inliers = inliers;
-	// 	output.inliersMeanDistance = inliersMeanDistance;
-	// 	output.inliersDistribution = inliersDistribution;
-	// 	output.matches = matches;
-	// 	return output;
-	// }
-
-	RegistrationInfo copyWithoutData() const {
-		RegistrationInfo output;
-		output.totalTime = totalTime;
-		output.covariance = covariance.clone();
-		output.rejectedMsg = rejectedMsg;
-		output.inliers = inliers;
-		output.inliersMeanDistance = inliersMeanDistance;
-		output.inliersDistribution = inliersDistribution;
-		output.matches = matches;
-		output.icpInliersRatio = 0.f;
-		output.icpTranslation = 0.f;
-		output.icpRotation = 0.f;
-		output.icpStructuralComplexity = 0.f;
-		output.icpStructuralDistribution = 0.f;
-		output.icpCorrespondences = 0;
-		return output;
-	}
-
-	cv::Mat covariance;
-	std::string rejectedMsg;
-	double totalTime;
-	bool keyFrame;
-	int inliers;
-	float inliersMeanDistance;
-	float inliersDistribution;
-	std::vector<int> inliersIDs;
-	int matches;
-	std::vector<int> matchesIDs;
-	std::vector<int> projectedIDs;
-};
 
 class RTABMAP_EXP FeatureTracker {
 
@@ -123,7 +68,6 @@ private:
 	double qualityLevel_;
 	int minDistance_;
 	bool flowBack_;
-	float minParallax_;
 	float maxDepth_;
 	float minDepth_;
 	int flowWinSize_;

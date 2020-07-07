@@ -583,6 +583,7 @@ class RTABMAP_EXP Parameters
 #else
     RTABMAP_PARAM(OdomVISFS, BundleAdjustment,      int, 0,      "Optimization with bundle adjustment: 0=disabled, 1=g2o, 2=cvsba, 3=Ceres.");
 #endif
+    RTABMAP_PARAM(OdomVISFS, OptimizationWindowSize,    int, 10,    "The optimazation windows size which determing the maintance of variables.");
 
     // Common registration parameters
     RTABMAP_PARAM(Reg, RepeatOnce,               bool, true,    "Do a second registration with the output of the first registration as guess. Only done if no guess was provided for the first registration (like on loop closure). It can be useful if the registration approach used can use a guess to get better matches.");
