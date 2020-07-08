@@ -21,7 +21,7 @@ SET(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake_modules")
 #######################
 SET(RTABMAP_MAJOR_VERSION 0)
 SET(RTABMAP_MINOR_VERSION 20)
-SET(RTABMAP_PATCH_VERSION 1)
+SET(RTABMAP_PATCH_VERSION 2)
 SET(RTABMAP_VERSION
   ${RTABMAP_MAJOR_VERSION}.${RTABMAP_MINOR_VERSION}.${RTABMAP_PATCH_VERSION})
   
@@ -471,7 +471,7 @@ ENDIF(WITH_REALSENSE)
 IF(WITH_REALSENSE2)
     IF(WIN32)
         FIND_PACKAGE(RealSense2 QUIET)
-	ELSE()
+    ELSE()
         FIND_PACKAGE(realsense2 QUIET)
     ENDIF()
     IF(realsense2_FOUND)
@@ -688,16 +688,6 @@ ELSEIF(OpenCV_VERSION VERSION_GREATER "3.4.2")
     SET(NONFREE "//")
   ENDIF(${matchres} EQUAL -1)
 ENDIF()
-
-# check if version status is "-dev" (SIFT compatibility issue between 4.3.0 vs 4.3.0-dev)
-FIND_FILE(OpenCV_VERSION_HPP opencv2/core/version.hpp
-  PATHS ${OpenCV_INCLUDE_DIRS}
-  NO_DEFAULT_PATH)
-FILE(READ ${OpenCV_VERSION_HPP} TMPTXT)
-STRING(FIND "${TMPTXT}" "-dev" matchres)
-IF(${matchres} EQUAL -1)
-  SET(OPENCV_DEV "//")
-ENDIF(${matchres} EQUAL -1)
 
 IF(NOT G2O_FOUND)
    SET(G2O "//")

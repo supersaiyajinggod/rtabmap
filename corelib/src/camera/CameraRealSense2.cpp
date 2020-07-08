@@ -77,7 +77,8 @@ CameraRealSense2::CameraRealSense2(
 	cameraHeight_(480),
 	cameraFps_(30),
 	publishInterIMU_(false),
-	dualMode_(false)
+	dualMode_(false),
+	closing_(false)
 #endif
 {
 	UDEBUG("");
@@ -86,12 +87,15 @@ CameraRealSense2::CameraRealSense2(
 CameraRealSense2::~CameraRealSense2()
 {
 #ifdef RTABMAP_REALSENSE2
+	closing_ = true;
 	try
 	{
+		UDEBUG("Closing device(s)...");
 		for(size_t i=0; i<dev_.size(); ++i)
 		{
 			if(dev_[i])
 			{
+				UDEBUG("Closing %d sensor(s) from device %d...", (int)dev_[i]->query_sensors().size(), (int)i);
 				for(rs2::sensor _sensor : dev_[i]->query_sensors())
 				{
 					try
@@ -104,6 +108,7 @@ CameraRealSense2::~CameraRealSense2()
 						UWARN("%s", error.what());
 					}
 				}
+				dev_[i]->hardware_reset(); // To avoid freezing on some Windows computers in the following destructor
 				delete dev_[i];
 			}
 		}
@@ -250,7 +255,7 @@ void CameraRealSense2::getPoseAndIMU(
 		{
 			if(maxWaitTimeMs > 0)
 			{
-				UWARN("Could not find poses to interpolate at time %f after waiting %d ms (last is %f)...", stamp, maxWaitTimeMs, poseBuffer_.rbegin()->first);
+				UWARN("Could not find poses to interpolate at image time %f after waiting %d ms (last is %f)...", stamp, maxWaitTimeMs, poseBuffer_.rbegin()->first);
 			}
 		}
 		else
@@ -303,7 +308,7 @@ void CameraRealSense2::getPoseAndIMU(
 		{
 			if(maxWaitTimeMs>0)
 			{
-				UWARN("Could not find acc data to interpolate at time %f after waiting %d ms (last is %f)...", stamp, maxWaitTimeMs, accBuffer_.rbegin()->first);
+				UWARN("Could not find acc data to interpolate at image time %f after waiting %d ms (last is %f)...", stamp, maxWaitTimeMs, accBuffer_.rbegin()->first);
 			}
 			imuMutex_.unlock();
 			return;
@@ -366,7 +371,7 @@ void CameraRealSense2::getPoseAndIMU(
 		{
 			if(maxWaitTimeMs>0)
 			{
-				UWARN("Could not find gyro data to interpolate at time %f after waiting %d ms (last is %f)...", stamp, maxWaitTimeMs, gyroBuffer_.rbegin()->first);
+				UWARN("Could not find gyro data to interpolate at image time %f after waiting %d ms (last is %f)...", stamp, maxWaitTimeMs, gyroBuffer_.rbegin()->first);
 			}
 			imuMutex_.unlock();
 			return;
@@ -519,7 +524,14 @@ bool CameraRealSense2::init(const std::string & calibrationFolder, const std::st
 			{
 				if (info.was_removed(*dev_[i]))
 				{
-					UERROR("The device has been disconnected!");
+					if (closing_)
+					{
+						UDEBUG("The device %d has been disconnected!", i);
+					}
+					else
+					{
+						UERROR("The device %d has been disconnected!", i);
+					}
 				}
 			}
 		}
@@ -1060,7 +1072,6 @@ SensorData CameraRealSense2::captureImage(CameraInfo * info)
 		if (frameset.size() == 2)
 		{
 			double now = UTimer::now();
-			UDEBUG("Frameset arrived.");
 			bool is_rgb_arrived = false;
 			bool is_depth_arrived = false;
 			bool is_left_fisheye_arrived = false;
@@ -1119,6 +1130,7 @@ SensorData CameraRealSense2::captureImage(CameraInfo * info)
 			}
 
 			stamp /= 1000.0; // put in seconds
+			UDEBUG("Frameset arrived. system=%fs frame=%fs", now, stamp);
 			if(stamp - now > 1000000000.0)
 			{
 				if(!clockSyncWarningShown_)

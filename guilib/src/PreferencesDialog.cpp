@@ -198,7 +198,7 @@ PreferencesDialog::PreferencesDialog(QWidget * parent) :
 #endif
 
 // SIFT
-#if CV_MAJOR_VERSION < 4 || (CV_MAJOR_VERSION == 4 && (CV_MINOR_VERSION < 3 || (CV_MINOR_VERSION==3 && !defined(RTABMAP_OPENCV_DEV))))
+#if CV_MAJOR_VERSION < 3 || (CV_MAJOR_VERSION == 4 && CV_MINOR_VERSION <= 3) || (CV_MAJOR_VERSION == 3 && (CV_MINOR_VERSION < 4 || (CV_MINOR_VERSION==4 && CV_SUBMINOR_VERSION<11)))
 #ifndef RTABMAP_NONFREE
 	_ui->comboBox_detector_strategy->setItemData(1, 0, Qt::UserRole - 1);
 	_ui->vis_feature_detector->setItemData(1, 0, Qt::UserRole - 1);
@@ -1886,7 +1886,7 @@ void PreferencesDialog::resetSettings(QGroupBox * groupBox)
 		_ui->lineEdit_rs2_jsonFile->clear();
 		_ui->lineEdit_openniOniPath->clear();
 		_ui->lineEdit_openni2OniPath->clear();
-		_ui->comboBox_k4a_rgb_resolution->setCurrentIndex(1);
+		_ui->comboBox_k4a_rgb_resolution->setCurrentIndex(0);
 		_ui->comboBox_k4a_framerate->setCurrentIndex(2);
 		_ui->comboBox_k4a_depth_resolution->setCurrentIndex(2);
 		_ui->checkbox_k4a_irDepth->setChecked(false);
@@ -2957,7 +2957,7 @@ void PreferencesDialog::writeCoreSettings(const QString & filePath) const
 
 bool PreferencesDialog::validateForm()
 {
-#if CV_MAJOR_VERSION < 4 || (CV_MAJOR_VERSION == 4 && (CV_MINOR_VERSION < 3 || (CV_MINOR_VERSION==3 && !defined(RTABMAP_OPENCV_DEV))))
+#if CV_MAJOR_VERSION < 3 || (CV_MAJOR_VERSION == 4 && CV_MINOR_VERSION <= 3) || (CV_MAJOR_VERSION == 3 && (CV_MINOR_VERSION < 4 || (CV_MINOR_VERSION==4 && CV_SUBMINOR_VERSION<11)))
 #ifndef RTABMAP_NONFREE
 	// verify that SURF/SIFT cannot be selected if not built with OpenCV nonfree module
 	// BOW dictionary type
@@ -2978,7 +2978,7 @@ bool PreferencesDialog::validateForm()
 		_ui->vis_feature_detector->setCurrentIndex(Feature2D::kFeatureFastBrief);
 	}
 #endif
-#else //>= 4.3.0-dev
+#else //>= 4.4.0 >= 3.4.11
 #ifndef RTABMAP_NONFREE
 	// verify that SURF cannot be selected if not built with OpenCV nonfree module
 	// BOW dictionary type
