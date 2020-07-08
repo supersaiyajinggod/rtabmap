@@ -611,6 +611,7 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 				transform.setNull();
 			}
 		}
+		featureManager_->updateFeature(_toSignature.getWords(), _toSignature.getWords3());
 		//update Feature, update _toSignature.getWords3() _toSignature.getWords()
 		_infoOut->inliersIDs = allInliers;
 		_infoOut->matchesIDs = allMatches;
@@ -624,6 +625,7 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 	_infoOut->inliers = static_cast<int>(allInliers.size());
 	_infoOut->matches = static_cast<int>(allMatches.size());
 	_infoOut->matchesInImage = static_cast<int>(kptsTo.size());
+	UINFO("############################# matchesInImage : %d", _infoOut->matchesInImage);
 	_infoOut->rejectedMsg = msg;
 	_infoOut->covariance = covariance;
 

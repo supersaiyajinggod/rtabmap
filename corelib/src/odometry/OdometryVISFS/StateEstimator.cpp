@@ -49,7 +49,7 @@ void StateEstimator::initialize() {
 
 void StateEstimator::estimateState() {
     while(1) {
-        UINFO("should running here!");
+        // UINFO("trackInfoBuf_.size(): %d.", trackInfoBuf_.size());
         TrackerInfo trackInfo;
         if (!trackInfoBuf_.empty()) {
             {
@@ -57,7 +57,7 @@ void StateEstimator::estimateState() {
                 trackInfo = trackInfoBuf_.front();
                 trackInfoBuf_.pop();
             }
-            trackInfoState_.insert(std::pair<std::size_t, TrackerInfo>(trackInfo.signatureId, trackInfo));
+            // trackInfoState_.insert(std::pair<std::size_t, TrackerInfo>(trackInfo.signatureId, trackInfo));
             framePoseInWorld_.insert(std::pair<std::size_t, Transform>(trackInfo.signatureId, trackInfo.globalPose));            
 
             // Process, checkParallax, triangular map point, update the result to feature manager buf and
@@ -66,20 +66,17 @@ void StateEstimator::estimateState() {
             bool keyFrame = featureManager_->checkParallax(trackInfo);
 
             featureManager_->cleanFeatureAndSignature(keyFrame);
-            for (auto it = trackInfoState_.begin(); it != trackInfoState_.end();) {
+            for (auto it = framePoseInWorld_.begin(); it != framePoseInWorld_.end();) {
                 std::size_t id = it->first;
                 if (!featureManager_->hasSignature(id)) {
-                    it = trackInfoState_.erase(it);
-                    framePoseInWorld_.erase(framePoseInWorld_.find(id));
+                    it = framePoseInWorld_.erase(it);
                 } else {
                     ++it;
                 }
             }
 
-            featureManager_->depthRecovery(framePoseInWorld_);
-            UINFO("estimateState running!");
+            // featureManager_->depthRecovery(framePoseInWorld_);
         }
-        UINFO("estimateThread running!");
 
         boost::this_thread::sleep(boost::get_system_time() + boost::posix_time::milliseconds(5));
     }

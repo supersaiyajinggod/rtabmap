@@ -130,7 +130,8 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
 
      std::size_t signatureId =  featureManager->getSignatureId();
      _data.setId(signatureId);
-     featureManager->addSignatrue(_data);
+     newFrame.setId(signatureId);
+     featureManager->addSignatrue(newFrame);
      trackInfo.signatureId = signatureId;
      trackInfo.totalTime = timer.elapsed();
 

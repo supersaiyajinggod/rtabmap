@@ -53,7 +53,7 @@ private:
 
 	std::queue<TrackerInfo> trackInfoBuf_;
     std::map<std::size_t, Transform> framePoseInWorld_;     // sigatureId, pose
-	std::map<std::size_t, TrackerInfo> trackInfoState_;		// signatureId, trackInfo
+	// std::map<std::size_t, TrackerInfo> trackInfoState_;		// signatureId, trackInfo
 
     boost::thread threadEstimateState_;
     boost::mutex mutexProcess_;

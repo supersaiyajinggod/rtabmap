@@ -75,7 +75,7 @@ std::vector<std::size_t> FeatureManager::addFeature(const std::vector<cv::KeyPoi
 		_words3d.insert(std::pair<int, cv::Point3f>(static_cast<int>(featureId_), _kpt3d[i]));
         ++featureId_;
     }
-
+	UINFO("featureId_: %d, featureIndex.size(): %d", featureId_, featureIndex.size());
 	return featureIndex;
 }
 
@@ -84,6 +84,7 @@ std::vector<std::size_t> FeatureManager::updateFeature(const std::multimap<int, 
 	std::vector<std::size_t> updatedFeatureIndex;
 
 	boost::lock_guard<boost::mutex> lock(mutexFeatureProcess_);
+	// UINFO("featrue region: %d ~ %d.", featrues_.begin()->getId(), featrues_.rbegin()->getId());
 	for (auto word : _words) {
 		auto it1 = _words3d.find(word.first);
 		auto it2 = std::find_if(featrues_.begin(), featrues_.end(), [word] (Featrue & feature) {
@@ -91,13 +92,10 @@ std::vector<std::size_t> FeatureManager::updateFeature(const std::multimap<int, 
 		});
 		
 		if (it1 != _words3d.end() && it2 == featrues_.end()) {	// Add new feature
-			UINFO("Error? There is a feature not in the list.");
+			UINFO("Error? There is a feature not in the list. it2 == featrues_.end(): %d. featruesId: %d.", it2 == featrues_.end(), word.first);
 		} else if (word.first == it1->first && word.first == static_cast<int>(it2->getId())) {	// Update
 			it2->featrueStatusInFrames_.insert(std::pair<std::size_t, FeatureStatusOfEachFrame>(signatureId_, FeatureStatusOfEachFrame(word.second.pt, it1->second)));
 			updatedFeatureIndex.push_back(word.first);
-			if (it2->featrueStatusInFrames_.size() > static_cast<std::size_t>(optimizationWindowSize_)) {
-				it2->featrueStatusInFrames_.erase(it2->featrueStatusInFrames_.begin());
-			}
 		}
 	}
 
@@ -105,10 +103,9 @@ std::vector<std::size_t> FeatureManager::updateFeature(const std::multimap<int, 
 }
 
 bool FeatureManager::checkParallax(const TrackerInfo & _trackInfo) {
-	if (signatures_.size() < 0.2 * optimizationWindowSize_ || static_cast<int>(featrues_.size()) < maxFeature_) { return true; }
 	int backUpPointsCount = maxFeature_ - _trackInfo.matchesInImage;
 	if (_trackInfo.inliers < (0.2 * maxFeature_) || backUpPointsCount > (0.5 * _trackInfo.inliers)) {
-		UDEBUG("KeyFrame condition satisfied!, inliers = %d, maxFeatures_ = %d, 0.1*maxFeatures_ = %f, backUpPointsCount = %d.", _trackInfo.inliers, maxFeature_, 0.1 * maxFeature_, backUpPointsCount);
+		UINFO("KeyFrame condition satisfied!, inliers = %d, maxFeatures_ = %d, 0.1*maxFeatures_ = %f, backUpPointsCount = %d.", _trackInfo.inliers, maxFeature_, 0.1 * maxFeature_, backUpPointsCount);
 		return true;
 	} else {	// Compute parallax
 		std::multimap<int, cv::KeyPoint> wordsFrom;
@@ -142,8 +139,9 @@ bool FeatureManager::checkParallax(const TrackerInfo & _trackInfo) {
 				parallaxSum += std::max(0.f, sqrt(du * du + dv * dv));
 			}
 		}
+		UINFO("Keyframe condition compute result=%f, minParallax_=%f.", (parallaxSum / static_cast<float>(parallaxNum)),minParallax_);
 		if ((parallaxSum / static_cast<float>(parallaxNum)) >= minParallax_) {
-			UDEBUG("Keyframe condition satisfied!. parallax!, compute result=%f, minParallax_=%f.", (parallaxSum / static_cast<float>(parallaxNum)),minParallax_);
+			UINFO("Keyframe condition satisfied!. parallax!, compute result=%f, minParallax_=%f.", (parallaxSum / static_cast<float>(parallaxNum)),minParallax_);
 			return true;
 		}
 	}
@@ -156,22 +154,28 @@ void FeatureManager::cleanFeatureAndSignature(bool _keyFrame) {
 	// Remove signature.
 	if (_keyFrame && (signatures_.size() > static_cast<std::size_t>(optimizationWindowSize_))) {
 		signatures_.pop_front();
-	} else {
+	} else if (signatures_.size() > static_cast<std::size_t>(optimizationWindowSize_)) {
 		auto it = signatures_.end();
 		--it; --it;
 		signatures_.erase(it);
 	}
+
+	// UINFO("siganature region: %d ~ %d.", signatures_.begin()->id(), signatures_.rbegin()->id());
 	// Remove features.
-	const size_t latestSignatureId = static_cast<std::size_t>(signatures_.rbegin()->id());
+	const std::size_t oldestSignatureId = static_cast<std::size_t>(signatures_.begin()->id());
 	
 	for (auto it = featrues_.begin(); it != featrues_.end();) {
-		auto stateInFrames = it->featrueStatusInFrames_.end();
-		--stateInFrames;
-		if (stateInFrames->first < latestSignatureId - static_cast<std::size_t>(optimizationWindowSize_)) {
+		auto currentInFrames = it->featrueStatusInFrames_.begin();
+		// if (currentInFrames->first < ((oldestSignatureId > static_cast<std::size_t>(optimizationWindowSize_)) ? (oldestSignatureId - static_cast<std::size_t>(optimizationWindowSize_)) : 0) ) {
+		if ((it->getStartFrame() + it->getTrackedCnt()) < oldestSignatureId) {
+			// UINFO("~~~~~~~~~~~~~~~~~~~~~total: %d, it->getTrackedCnt(): %d and oldestSignatureId: %d", it->getStartFrame() + it->getTrackedCnt(), it->getTrackedCnt(), oldestSignatureId);
+			// UINFO("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~erase id: %d.", it->getId());
 			it = featrues_.erase(it);
+		} else {
+			++it;
 		}
-		++it;
 	}
+	UINFO("optimizationWindowSize statistics, signatures_.size(): %d and featrues_.size() %d", signatures_.size(), featrues_.size());
 }
 
 void FeatureManager::depthRecovery(const std::map<std::size_t, Transform> & _framePoseInWorld) {
