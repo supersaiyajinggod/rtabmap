@@ -48,15 +48,57 @@ std::size_t FeatureManager::getSignatureId() {
 	return signatureId_;
 }
 
+Signature FeatureManager::getLastSignature() {
+	boost::lock_guard<boost::mutex> lock(mutexFeatureProcess_);
+	if (!signatures_.empty()){
+		return * signatures_.rbegin();
+	} else {
+		return Signature();
+	}
+	
+}
+
+void FeatureManager::update(const TrackerInfo & _trackInfo) {
+	TrackerInfo trackInfo = _trackInfo;
+	// Update signature
+	signatures_.push_back(trackInfo.signature);
+
+	// Update feature
+	while (!trackInfo.newFeatures.empty()) {
+		features_.push_back(trackInfo.newFeatures.front());
+		trackInfo.newFeatures.pop();
+	}
+
+	// Update feature state
+	while (!trackInfo.featuresState.empty()) {
+		const std::multimap<int, cv::KeyPoint> & _words = trackInfo.featuresState.front().first;
+		const std::multimap<int, cv::Point3f> & _words3d = trackInfo.featuresState.front().second;
+
+		for (auto word : _words) {
+			auto it1 = _words3d.find(word.first);
+			auto it2 = std::find_if(features_.begin(), features_.end(), [word] (Featrue & feature) {
+				return word.first == static_cast<int>(feature.getId());
+			});
+			
+			if (it1 != _words3d.end() && it2 == features_.end()) {	// Add new feature
+				UINFO("Error? There is a feature not in the list. it2 == features_.end(): %d. featruesId: %d.", it2 == features_.end(), word.first);
+			} else if (word.first == it1->first && word.first == static_cast<int>(it2->getId())) {	// Update
+				it2->featrueStatusInFrames_.insert(std::pair<std::size_t, FeatureStatusOfEachFrame>(signatureId_, FeatureStatusOfEachFrame(word.second.pt, it1->second)));
+			}
+		}
+	}
+
+}
+
 // Caution, after call this function, the member variable, signatureId_, of this class have been increased. 
-std::size_t FeatureManager::addSignatrue(const Signature & _signature) {
-    boost::lock_guard<boost::mutex> lock(mutexFeatureProcess_);
-    signatures_.push_back(_signature);
+std::size_t FeatureManager::publishSignatrue(const Signature & _signature, TrackerInfo & _trackInfo) {
+	boost::lock_guard<boost::mutex> lock(mutexFeatureProcess_);
+	_trackInfo.signature  = _signature;
 	++signatureId_;
 	return signatureId_ - 1;
 }
 
-std::vector<std::size_t> FeatureManager::addFeature(const std::vector<cv::KeyPoint> & _kpt, const std::vector<cv::Point3f> & _kpt3d, std::multimap<int, cv::KeyPoint> & _words, std::multimap<int, cv::Point3f> & _words3d) {
+std::vector<std::size_t> FeatureManager::publishFeatures(const std::vector<cv::KeyPoint> & _kpt, const std::vector<cv::Point3f> & _kpt3d, std::multimap<int, cv::KeyPoint> & _words, std::multimap<int, cv::Point3f> & _words3d, TrackerInfo * _trackInfo) {
     UASSERT(_kpt.size() == _kpt3d.size());
     if (!_words.empty() && !_words3d.empty()) {
 		_words.clear();
@@ -64,12 +106,11 @@ std::vector<std::size_t> FeatureManager::addFeature(const std::vector<cv::KeyPoi
     }
 	std::vector<std::size_t> featureIndex;
 
-    boost::lock_guard<boost::mutex> lock(mutexFeatureProcess_);
     for (std::size_t i = 0; i < _kpt.size(); ++i) {
         Featrue newFeture(featureId_, signatureId_, 0);
         std::isfinite(_kpt3d[i].z) ? newFeture.setSolveState(Featrue::FROM_DEPTH) : newFeture.setSolveState(Featrue::NOT_SOLVE);
         newFeture.featrueStatusInFrames_.insert(std::pair<std::size_t, FeatureStatusOfEachFrame>(signatureId_, FeatureStatusOfEachFrame(_kpt[i].pt, _kpt3d[i])));
-        featrues_.push_back(newFeture);
+        _trackInfo->newFeatures.push(newFeture);
 		featureIndex.push_back(featureId_);
 		_words.insert(std::pair<int, cv::KeyPoint>(static_cast<int>(featureId_), _kpt[i]));
 		_words3d.insert(std::pair<int, cv::Point3f>(static_cast<int>(featureId_), _kpt3d[i]));
@@ -79,25 +120,15 @@ std::vector<std::size_t> FeatureManager::addFeature(const std::vector<cv::KeyPoi
 	return featureIndex;
 }
 
-std::vector<std::size_t> FeatureManager::updateFeature(const std::multimap<int, cv::KeyPoint> & _words, const std::multimap<int, cv::Point3f> & _words3d) {
+std::vector<std::size_t> FeatureManager::publishFeatureStates(const std::multimap<int, cv::KeyPoint> & _words, const std::multimap<int, cv::Point3f> & _words3d, TrackerInfo * _trackInfo) {
 	UASSERT(_words.size() == _words3d.size());
 	std::vector<std::size_t> updatedFeatureIndex;
 
-	boost::lock_guard<boost::mutex> lock(mutexFeatureProcess_);
-	// UINFO("featrue region: %d ~ %d.", featrues_.begin()->getId(), featrues_.rbegin()->getId());
-	for (auto word : _words) {
-		auto it1 = _words3d.find(word.first);
-		auto it2 = std::find_if(featrues_.begin(), featrues_.end(), [word] (Featrue & feature) {
-			return word.first == static_cast<int>(feature.getId());
-		});
-		
-		if (it1 != _words3d.end() && it2 == featrues_.end()) {	// Add new feature
-			UINFO("Error? There is a feature not in the list. it2 == featrues_.end(): %d. featruesId: %d.", it2 == featrues_.end(), word.first);
-		} else if (word.first == it1->first && word.first == static_cast<int>(it2->getId())) {	// Update
-			it2->featrueStatusInFrames_.insert(std::pair<std::size_t, FeatureStatusOfEachFrame>(signatureId_, FeatureStatusOfEachFrame(word.second.pt, it1->second)));
-			updatedFeatureIndex.push_back(word.first);
-		}
+	for (auto word: _words) {
+		updatedFeatureIndex.push_back(word.first);
 	}
+
+	_trackInfo->featuresState.push(std::pair<std::multimap<int, cv::KeyPoint>, std::multimap<int, cv::Point3f>>(_words, _words3d));
 
 	return updatedFeatureIndex;
 }
@@ -114,7 +145,6 @@ bool FeatureManager::checkParallax(const TrackerInfo & _trackInfo) {
 			const int latestSignatureId = static_cast<int>(_trackInfo.signatureId);
 			const int secondLatestSignatureId = static_cast<int>(latestSignatureId - 1);
 			int breakFlag = 0;
-			boost::lock_guard<boost::mutex> lock(mutexFeatureProcess_);
 			for (std::list<Signature>::reverse_iterator rIt = signatures_.rbegin(); rIt != signatures_.rend(); ++rIt) {
 				if (rIt->id() == latestSignatureId) {
 					wordsTo = rIt->getWords();
@@ -150,7 +180,6 @@ bool FeatureManager::checkParallax(const TrackerInfo & _trackInfo) {
 }
 
 void FeatureManager::cleanFeatureAndSignature(bool _keyFrame) {
-	boost::lock_guard<boost::mutex> lock(mutexFeatureProcess_);
 	// Remove signature.
 	if (_keyFrame && (signatures_.size() > static_cast<std::size_t>(optimizationWindowSize_))) {
 		signatures_.pop_front();
@@ -159,30 +188,28 @@ void FeatureManager::cleanFeatureAndSignature(bool _keyFrame) {
 		--it; --it;
 		signatures_.erase(it);
 	}
-
 	// UINFO("siganature region: %d ~ %d.", signatures_.begin()->id(), signatures_.rbegin()->id());
 	// Remove features.
 	const std::size_t oldestSignatureId = static_cast<std::size_t>(signatures_.begin()->id());
 	
-	for (auto it = featrues_.begin(); it != featrues_.end();) {
+	for (auto it = features_.begin(); it != features_.end();) {
 		auto currentInFrames = it->featrueStatusInFrames_.begin();
 		// if (currentInFrames->first < ((oldestSignatureId > static_cast<std::size_t>(optimizationWindowSize_)) ? (oldestSignatureId - static_cast<std::size_t>(optimizationWindowSize_)) : 0) ) {
 		if ((it->getStartFrame() + it->getTrackedCnt()) < oldestSignatureId) {
 			// UINFO("~~~~~~~~~~~~~~~~~~~~~total: %d, it->getTrackedCnt(): %d and oldestSignatureId: %d", it->getStartFrame() + it->getTrackedCnt(), it->getTrackedCnt(), oldestSignatureId);
 			// UINFO("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~erase id: %d.", it->getId());
-			it = featrues_.erase(it);
+			it = features_.erase(it);
 		} else {
 			++it;
 		}
 	}
-	UINFO("optimizationWindowSize statistics, signatures_.size(): %d and featrues_.size() %d", signatures_.size(), featrues_.size());
+	UINFO("optimizationWindowSize statistics, signatures_.size(): %d and features_.size() %d", signatures_.size(), features_.size());
 }
 
 void FeatureManager::depthRecovery(const std::map<std::size_t, Transform> & _framePoseInWorld) {
-	boost::lock_guard<boost::mutex> lock(mutexFeatureProcess_);
 	const auto lastSignatureIt = signatures_.rbegin();
 	std::multimap<int, cv::Point3f> word3d = lastSignatureIt->getWords3();
-	for (auto feature : featrues_) {
+	for (auto feature : features_) {
 		if ((feature.getSolveState() == Featrue::NOT_SOLVE || feature.getSolveState() == Featrue::FROM_CALCULATE) && (feature.getTrackedCnt() > 1)) {
 			auto latestIt = feature.featrueStatusInFrames_.rbegin();
 			auto tmp = latestIt;
@@ -285,7 +312,6 @@ void FeatureManager::depthRecovery(const std::map<std::size_t, Transform> & _fra
 }
 
 bool FeatureManager::hasSignature(const std::size_t _id) {
-	boost::lock_guard<boost::mutex> lock(mutexFeatureProcess_);
 	auto it = std::find_if(signatures_.begin(), signatures_.end(), [_id] (Signature & signature) {
 		return signature.id() == static_cast<int>(_id);
 	});
@@ -297,11 +323,10 @@ bool FeatureManager::hasSignature(const std::size_t _id) {
 }
 
 bool FeatureManager::hasFeature(const std::size_t _id) {
-	boost::lock_guard<boost::mutex> lock(mutexFeatureProcess_);
-	auto it = std::find_if(featrues_.begin(), featrues_.end(), [_id] (Featrue & feature) {
+	auto it = std::find_if(features_.begin(), features_.end(), [_id] (Featrue & feature) {
 		return feature.getId() == _id;
 	});
-	if (it != featrues_.end()) {
+	if (it != features_.end()) {
 		return true;
 	} else {
 		return false;
@@ -309,7 +334,7 @@ bool FeatureManager::hasFeature(const std::size_t _id) {
 }
 
 bool FeatureManager::triangulateByTwoFrames(const Transform & _pose0, const Transform & _pose1, const cv::Point2f & _uv0, const cv::Point2f & _uv1,
-												cv::Point3f & _pointInWord, cv::Point3f & _pointInPose0, cv::Point3f & _pointInPose1) {
+												cv::Point3f & _pointInWord, cv::Point3f & _pointInPose0, cv::Point3f & _pointInPose1) const {
 	const Eigen::Matrix4f pose0 = _pose0.toEigen4f();
 	const Eigen::Matrix4f pose1 = _pose1.toEigen4f();
 	const Eigen::Vector2f uv0 = Eigen::Vector2f(_uv0.x, _uv0.y);
@@ -341,9 +366,21 @@ bool FeatureManager::triangulateByTwoFrames(const Transform & _pose0, const Tran
 	return true;
 }
 
-Signature FeatureManager::getLastSignature() {
-	boost::lock_guard<boost::mutex> lock(mutexFeatureProcess_);
-	return * signatures_.rbegin();
+
+
+void FeatureManager::process(const TrackerInfo & _trackInfo, std::map<std::size_t, Transform> & _framePoseInWorld) {
+	update(_trackInfo);
+	bool keyFrame = checkParallax(_trackInfo);
+	cleanFeatureAndSignature(keyFrame);
+    for (auto it = _framePoseInWorld.begin(); it != _framePoseInWorld.end();) {
+        std::size_t id = it->first;
+        if (!hasSignature(id)) {
+            it = _framePoseInWorld.erase(it);
+        } else {
+            ++it;
+        }
+    }
+	// depthRecovery(_framePoseInWorld);
 }
 
 }

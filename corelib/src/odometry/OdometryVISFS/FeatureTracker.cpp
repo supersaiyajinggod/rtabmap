@@ -425,7 +425,7 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 	UASSERT(kptsTo3D.size() == 0 || kptsTo.size() == kptsTo3D.size());
 
 	if (_fromSignature.getWords().empty() && _fromSignature.sensorData().keypoints3D().empty()) {
-		auto wordsId = featureManager_->addFeature(kptsFrom, kptsFrom3D, wordsFrom, words3From);
+		auto wordsId = featureManager_->publishFeatures(kptsFrom, kptsFrom3D, wordsFrom, words3From, _infoOut);
 		for (std::size_t i = 0; i < wordsId.size(); ++i) {
 			wordsTo.insert(std::pair<int, cv::KeyPoint>(wordsId[i], kptsTo[i]));
 			words3To.insert(std::pair<int, cv::Point3f>(wordsId[i], kptsTo3D[i]));
@@ -611,7 +611,7 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 				transform.setNull();
 			}
 		}
-		featureManager_->updateFeature(_toSignature.getWords(), _toSignature.getWords3());
+		featureManager_->publishFeatureStates(_toSignature.getWords(), _toSignature.getWords3(), _infoOut);
 		//update Feature, update _toSignature.getWords3() _toSignature.getWords()
 		_infoOut->inliersIDs = allInliers;
 		_infoOut->matchesIDs = allMatches;
@@ -625,7 +625,6 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 	_infoOut->inliers = static_cast<int>(allInliers.size());
 	_infoOut->matches = static_cast<int>(allMatches.size());
 	_infoOut->matchesInImage = static_cast<int>(kptsTo.size());
-	UINFO("############################# matchesInImage : %d", _infoOut->matchesInImage);
 	_infoOut->rejectedMsg = msg;
 	_infoOut->covariance = covariance;
 
@@ -656,7 +655,7 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 		}
 		std::multimap<int, cv::KeyPoint> newWordsTo;
 		std::multimap<int, cv::Point3f> newWords3To;
-		featureManager_->addFeature(newKpt, newkpt3D, newWordsTo, newWords3To);
+		featureManager_->publishFeatures(newKpt, newkpt3D, newWordsTo, newWords3To, _infoOut);
 	
 		wordsTo.clear();
 		words3To.clear();

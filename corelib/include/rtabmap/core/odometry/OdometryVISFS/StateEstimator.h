@@ -40,7 +40,7 @@ public:
     void initialize();
     virtual ~StateEstimator();
 
-	void updateTrackState(const TrackerInfo & _trackInfo);
+	void publishTrackState(const TrackerInfo & _trackInfo);
 
     void estimateState();
 
@@ -48,12 +48,14 @@ public:
     FeatureTracker * featureTracker_;
 
 private:
+    // void updateTrackState
+
 	int optimizationWindowSize_;
     ParametersMap parameters_;
 
 	std::queue<TrackerInfo> trackInfoBuf_;
     std::map<std::size_t, Transform> framePoseInWorld_;     // sigatureId, pose
-	// std::map<std::size_t, TrackerInfo> trackInfoState_;		// signatureId, trackInfo
+	std::map<std::size_t, TrackerInfo> trackInfoState_;		// signatureId, trackInfo
 
     boost::thread threadEstimateState_;
     boost::mutex mutexProcess_;

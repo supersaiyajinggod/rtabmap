@@ -49,10 +49,11 @@ void StateEstimator::initialize() {
 
 void StateEstimator::estimateState() {
     while(1) {
-        // UINFO("trackInfoBuf_.size(): %d.", trackInfoBuf_.size());
+        UINFO("THREAD ESTIMATESTATE LOOPBEGINING...");
         TrackerInfo trackInfo;
         if (!trackInfoBuf_.empty()) {
             {
+                UINFO("THREAD ESTIMATESTATE READ DATA...");
                 boost::lock_guard<boost::mutex> lock(mutexDataReadWrite_);
                 trackInfo = trackInfoBuf_.front();
                 trackInfoBuf_.pop();
@@ -60,29 +61,15 @@ void StateEstimator::estimateState() {
             // trackInfoState_.insert(std::pair<std::size_t, TrackerInfo>(trackInfo.signatureId, trackInfo));
             framePoseInWorld_.insert(std::pair<std::size_t, Transform>(trackInfo.signatureId, trackInfo.globalPose));            
 
-            // Process, checkParallax, triangular map point, update the result to feature manager buf and
-            //  remember the feature tracker should modify to get the last frame from the feature manager buf.
-
-            bool keyFrame = featureManager_->checkParallax(trackInfo);
-
-            featureManager_->cleanFeatureAndSignature(keyFrame);
-            for (auto it = framePoseInWorld_.begin(); it != framePoseInWorld_.end();) {
-                std::size_t id = it->first;
-                if (!featureManager_->hasSignature(id)) {
-                    it = framePoseInWorld_.erase(it);
-                } else {
-                    ++it;
-                }
-            }
-
-            // featureManager_->depthRecovery(framePoseInWorld_);
+            featureManager_->process(trackInfo, framePoseInWorld_);
         }
-
+        UINFO("BEFORE SLEEP...");
         boost::this_thread::sleep(boost::get_system_time() + boost::posix_time::milliseconds(5));
+        UINFO("THREAD ESTIMATESTATE LOOPENDDING...");
     }
 }
 
-void StateEstimator::updateTrackState(const TrackerInfo & _trackInfo) {
+void StateEstimator::publishTrackState(const TrackerInfo & _trackInfo) {
     boost::lock_guard<boost::mutex> lock(mutexDataReadWrite_);
     trackInfoBuf_.push(_trackInfo);
 }

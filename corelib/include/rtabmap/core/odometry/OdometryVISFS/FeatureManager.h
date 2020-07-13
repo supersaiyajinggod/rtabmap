@@ -39,6 +39,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace rtabmap {
 
+class Featrue;
+class FeatureStatusOfEachFrame;
+
 class RTABMAP_EXP TrackerInfo {
 public:
     TrackerInfo() :
@@ -86,6 +89,9 @@ public:
 	std::vector<int> matchesIDs;
     std::vector<int> matchesInImageIDs;
 	std::vector<int> projectedIDs;
+    Signature signature;
+    std::queue<Featrue> newFeatures;
+    std::queue<std::pair<std::multimap<int, cv::KeyPoint>, std::multimap<int, cv::Point3f>>> featuresState;
 };
 
 class RTABMAP_EXP FeatureStatusOfEachFrame {
@@ -145,7 +151,7 @@ public:
     std::map<std::size_t, FeatureStatusOfEachFrame> featrueStatusInFrames_;     // <signatrueId, FeatureStatusOfEachFrame> 
 
 private:
-    const std::size_t featrueId_;
+    std::size_t featrueId_;
     std::size_t startFrameId_;
     double estimatedDepth_;
     cv::Point3f PoseTwc_;
@@ -156,27 +162,34 @@ class RTABMAP_EXP FeatureManager {
 public:
     FeatureManager(const ParametersMap & _parameters);
     std::size_t getSignatureId();
-    std::size_t addSignatrue(const Signature & _signature);
-    std::vector<std::size_t> addFeature(const std::vector<cv::KeyPoint> & _kpt, const std::vector<cv::Point3f> & _kpt3d, std::multimap<int, cv::KeyPoint> & _words, std::multimap<int, cv::Point3f> & _words3d);
-    std::vector<std::size_t> updateFeature(const std::multimap<int, cv::KeyPoint> & _words, const std::multimap<int, cv::Point3f> & _words3d);
+    Signature getLastSignature();
+    std::size_t publishSignatrue(const Signature & _signature, TrackerInfo & _trackInfo);
+    std::vector<std::size_t> publishFeatures(const std::vector<cv::KeyPoint> & _kpt, const std::vector<cv::Point3f> & _kpt3d, std::multimap<int, cv::KeyPoint> & _words, std::multimap<int, cv::Point3f> & _words3d, TrackerInfo * _trackInfo);
+    std::vector<std::size_t> publishFeatureStates(const std::multimap<int, cv::KeyPoint> & _words, const std::multimap<int, cv::Point3f> & _words3d, TrackerInfo * _trackInfo);
+    void process(const TrackerInfo & _trackInfo, std::map<std::size_t, Transform> & _framePoseInWorld);
+
+    std::queue<Signature> signaturesBuf_;
+    std::queue<Featrue> featuresBuf_;
+    std::queue<std::pair<std::multimap<int, cv::KeyPoint>, std::multimap<int, cv::Point3f>>> featureStateBuf_;
+
+private:
+    bool hasSignature(const std::size_t _id);
+    bool hasFeature(const std::size_t _id);
     bool checkParallax(const TrackerInfo & _trackInfo); //True: keyframe, False: Not keyframe.
     void cleanFeatureAndSignature(bool _keyFrame);
     void depthRecovery(const std::map<std::size_t, Transform> & _framePoseInWorld);
-    bool hasSignature(const std::size_t _id);
-    bool hasFeature(const std::size_t _id);
-    Signature getLastSignature();
-
-    std::list<Featrue> featrues_;
-    std::list<Signature> signatures_;
-
-private:
-    bool triangulateByTwoFrames(const Transform & _pose0, const Transform & _pose1, const cv::Point2f & _uv0, const cv::Point2f & _uv1, cv::Point3f & _pointInWord, cv::Point3f & _pointInPose0, cv::Point3f & _pointInPose1);
+    void update(const TrackerInfo & _trackInfo);
+    bool triangulateByTwoFrames(const Transform & _pose0, const Transform & _pose1, const cv::Point2f & _uv0, const cv::Point2f & _uv1, cv::Point3f & _pointInWord, cv::Point3f & _pointInPose0, cv::Point3f & _pointInPose1) const;
 
     int optimizationWindowSize_;
     int maxFeature_;
     float minParallax_;
     ParametersMap parameters_;
     boost::mutex mutexFeatureProcess_;
+    // boost::mutex mutexDataReadWrite_;
+
+    std::list<Featrue> features_;
+    std::list<Signature> signatures_;
 
     std::size_t featureId_;
     std::size_t signatureId_;

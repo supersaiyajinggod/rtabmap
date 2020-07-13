@@ -74,13 +74,20 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
           // OdometryVISFS
           // Signature tmpRefFrame = lastFrame_;
           Signature tmpRefFrame = featureManager->getLastSignature();
-          output = featureTracker->computeTransformationMod(tmpRefFrame, newFrame, _guess.isNull()?motionSinceLastFrame*_guess:Transform(), &trackInfo);
+          if (tmpRefFrame.id() == lastFrame_.id() && tmpRefFrame.sensorData().isValid()) {
+               UINFO("use featureManager's last signature.");
+               output = featureTracker->computeTransformationMod(tmpRefFrame, newFrame, _guess.isNull()?motionSinceLastFrame*_guess:Transform(), &trackInfo);
+          } else {
+               UINFO("use lastframe_.");
+               tmpRefFrame = lastFrame_;
+               output = featureTracker->computeTransformationMod(tmpRefFrame, newFrame, _guess.isNull()?motionSinceLastFrame*_guess:Transform(), &trackInfo);
+          }
           // If OdometryVISFS failed, use F2M strategy.
 
           if (output.isNull()) {
                UINFO("Trial failed. ~~~!!!~~~");
-               // tmpRefFrame = lastFrame_;
-               tmpRefFrame = featureManager->getLastSignature();
+               tmpRefFrame = lastFrame_;
+               // tmpRefFrame = featureManager->getLastSignature();
 			// Reset matches, but keep already extracted features in newFrame.sensorData()
 			newFrame.setWords(std::multimap<int, cv::KeyPoint>());
 			newFrame.setWords3(std::multimap<int, cv::Point3f>());
@@ -117,7 +124,6 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
      } else if (!trackInfo.rejectedMsg.empty()) {
           UWARN("Registration failed: \"%s\"", trackInfo.rejectedMsg.c_str());
      }
-     lastFrame_ = newFrame;
      _data.setFeatures(newFrame.sensorData().keypoints(), newFrame.sensorData().keypoints3D(), newFrame.sensorData().descriptors());
 
      if (_info) {
@@ -131,15 +137,16 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
      std::size_t signatureId =  featureManager->getSignatureId();
      _data.setId(signatureId);
      newFrame.setId(signatureId);
-     featureManager->addSignatrue(newFrame);
+     newFrame.setPose(trackInfo.globalPose);
+     featureManager->publishSignatrue(newFrame, trackInfo);
      trackInfo.signatureId = signatureId;
      trackInfo.totalTime = timer.elapsed();
-
+     lastFrame_ = newFrame;
 	UINFO("Odom update time = %fs lost=%s inliers=%d, ref frame corners=%d, transform accepted=%s",
 		trackInfo.totalTime, output.isNull() ? "true" : "false", static_cast<int>(trackInfo.inliers),
 		static_cast<int>(newFrame.sensorData().keypoints().size()), !output.isNull() ? "true" : "false");
 
-     stateEstimator_->updateTrackState(trackInfo);
+     stateEstimator_->publishTrackState(trackInfo);
 
 	return output;
 }
