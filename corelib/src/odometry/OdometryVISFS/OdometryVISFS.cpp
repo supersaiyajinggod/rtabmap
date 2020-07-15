@@ -34,12 +34,12 @@ namespace rtabmap {
 
 OdometryVISFS::OdometryVISFS(const ParametersMap & _parameters) : Odometry(_parameters) {
      parameters_ = _parameters;
-     stateEstimator_ = new StateEstimator(parameters_);
+     featureTracker_ = new FeatureTracker(parameters_);
 
 }
 
 OdometryVISFS::~OdometryVISFS() {
-     delete stateEstimator_;
+     delete featureTracker_;
 }
 
 void OdometryVISFS::reset(const Transform & _initialPose) {
@@ -74,26 +74,27 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
           // OdometryVISFS
           // Signature tmpRefFrame = lastFrame_;
           Signature tmpRefFrame = featureManager->getLastSignature();
-          if (tmpRefFrame.id() == lastFrame_.id() && tmpRefFrame.sensorData().isValid()) {
-               UINFO("use featureManager's last signature.");
-               output = featureTracker->computeTransformationMod(tmpRefFrame, newFrame, _guess.isNull()?motionSinceLastFrame*_guess:Transform(), &trackInfo);
-          } else {
-               UINFO("use lastframe_.");
+          // UINFO("tmpRefFrame.sensorData().isValid() = %d, tmpRefFrame.id() = %d, lastFrame.id()");
+          if (!(tmpRefFrame.sensorData().isValid() && (tmpRefFrame.id() == lastFrame_.id()))) {
                tmpRefFrame = lastFrame_;
-               output = featureTracker->computeTransformationMod(tmpRefFrame, newFrame, _guess.isNull()?motionSinceLastFrame*_guess:Transform(), &trackInfo);
+               UINFO("use lastFrame ......");
           }
-          // If OdometryVISFS failed, use F2M strategy.
+          output = featureTracker_->computeTransformationMod(tmpRefFrame, newFrame, _guess.isNull()?motionSinceLastFrame*_guess:Transform(), &trackInfo);
 
+          // If failed, recompute with no guess.
           if (output.isNull()) {
                UINFO("Trial failed. ~~~!!!~~~");
-               tmpRefFrame = lastFrame_;
-               // tmpRefFrame = featureManager->getLastSignature();
+               // tmpRefFrame = lastFrame_;
+               Signature tmpRefFrame = featureManager->getLastSignature();
+               if (!(tmpRefFrame.sensorData().isValid() && (tmpRefFrame.id() == lastFrame_.id()))) {
+                    tmpRefFrame = lastFrame_;
+               }
 			// Reset matches, but keep already extracted features in newFrame.sensorData()
 			newFrame.setWords(std::multimap<int, cv::KeyPoint>());
 			newFrame.setWords3(std::multimap<int, cv::Point3f>());
 			newFrame.setWordsDescriptors(std::multimap<int, cv::Mat>());
                // Retry the calculate again with no guess.
-               output = featureTracker->computeTransformationMod(tmpRefFrame, newFrame, Transform(), &trackInfo);
+               output = featureTracker_->computeTransformationMod(tmpRefFrame, newFrame, Transform(), &trackInfo);
           }
 
           if (_info) {
@@ -137,16 +138,28 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
      std::size_t signatureId =  featureManager->getSignatureId();
      _data.setId(signatureId);
      newFrame.setId(signatureId);
+     UINFO("trackInfo.globalPose=%s", trackInfo.globalPose.prettyPrint().c_str());
      newFrame.setPose(trackInfo.globalPose);
-     featureManager->publishSignatrue(newFrame, trackInfo);
+     featureManager->addSignatrue(newFrame);
      trackInfo.signatureId = signatureId;
      trackInfo.totalTime = timer.elapsed();
      lastFrame_ = newFrame;
+
+     // feature process.
+     featureManager->manageProcess(trackInfo);
+
 	UINFO("Odom update time = %fs lost=%s inliers=%d, ref frame corners=%d, transform accepted=%s",
 		trackInfo.totalTime, output.isNull() ? "true" : "false", static_cast<int>(trackInfo.inliers),
 		static_cast<int>(newFrame.sensorData().keypoints().size()), !output.isNull() ? "true" : "false");
 
-     stateEstimator_->publishTrackState(trackInfo);
+     if (featureTracker_->displayTracker_ && featureTracker_->imagesToDisplay_.size() > 2) {
+          featureTracker_->displayTracker(9, featureTracker_->imagesToDisplay_[0], featureTracker_->imagesToDisplay_[1], featureTracker_->imagesToDisplay_[2],
+                                             featureTracker_->cornersToDisplay_[0], featureTracker_->cornersToDisplay_[1], featureTracker_->cornersToDisplay_[2],
+                                             featureTracker_->statusToDisplay_, trackInfo.keyframe ? 1 : 0, featureManager->featuresDisplay_);
+          // featureTracker_->displayTracker(8, featureTracker_->imagesToDisplay_[0], featureTracker_->imagesToDisplay_[1], featureTracker_->imagesToDisplay_[2],
+          //                                    featureTracker_->cornersToDisplay_[0], featureTracker_->cornersToDisplay_[1], featureTracker_->cornersToDisplay_[2],
+          //                                    featureTracker_->statusToDisplay_, trackInfo.keyframe ? 1 : 0);
+     }
 
 	return output;
 }

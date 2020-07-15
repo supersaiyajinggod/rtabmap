@@ -53,9 +53,10 @@ private:
     Signature lastFrame_;
 	ParametersMap parameters_;
 
-    StateEstimator * stateEstimator_;
-	#define featureTracker stateEstimator_->featureTracker_
-	#define featureManager stateEstimator_->featureManager_
+    // StateEstimator * stateEstimator_;
+	FeatureTracker * featureTracker_;
+	// #define featureTracker stateEstimator_->featureTracker_
+	#define featureManager featureTracker_->featureManager_
 };
 
 

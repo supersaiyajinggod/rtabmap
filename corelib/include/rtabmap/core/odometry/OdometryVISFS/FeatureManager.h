@@ -39,9 +39,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace rtabmap {
 
-class Featrue;
-class FeatureStatusOfEachFrame;
-
 class RTABMAP_EXP TrackerInfo {
 public:
     TrackerInfo() :
@@ -51,6 +48,7 @@ public:
 	inliersDistribution(0.f),
 	matches(0),
     matchesInImage(0),
+    keyframe(false),
 	signatureId(0) {
 		deltaT = Transform::getIdentity();
 		globalPose = Transform::getIdentity();
@@ -83,54 +81,58 @@ public:
 	std::vector<int> inliersIDs;
 	int matches;
     int matchesInImage;
+    bool keyframe;
 	std::size_t signatureId;
 	Transform deltaT;
 	Transform globalPose;
 	std::vector<int> matchesIDs;
     std::vector<int> matchesInImageIDs;
 	std::vector<int> projectedIDs;
-    Signature signature;
-    std::queue<Featrue> newFeatures;
-    std::queue<std::pair<std::multimap<int, cv::KeyPoint>, std::multimap<int, cv::Point3f>>> featuresState;
 };
 
 class RTABMAP_EXP FeatureStatusOfEachFrame {
 public:
-    FeatureStatusOfEachFrame(const cv::Point2f & _uv, const cv::Point3f & _point3d) {
+    FeatureStatusOfEachFrame(const cv::Point2f & _uv, const cv::Point3f & _pointNormal, const cv::Point3f & _point3d) {
         uv_ = _uv;
+        pointNormal_ = _pointNormal;
         point3d_ = _point3d;
         velocity_ = cv::Point2f(-1.f, -1.f);
+        isStereo = false;
     };
 
-    FeatureStatusOfEachFrame(const cv::Point2f & _uv, const cv::Point3f & _point3d, const cv::Point2f & _velocity) {
+    FeatureStatusOfEachFrame(const cv::Point2f & _uv, const cv::Point3f & _pointNormal, const cv::Point3f & _point3d, const cv::Point2f & _velocity) {
         uv_ = _uv;
+        pointNormal_ = _pointNormal;
         point3d_ = _point3d;
         velocity_ = _velocity;
+        isStereo = false;
     };
 
-    void rightObservation(const cv::Point2f & _uv, const cv::Point3f & _point3d) {
+    void rightObservation(const cv::Point2f & _uv, const cv::Point3f & _pointNormal, const cv::Point3f & _point3d) {
         uvRight_ = _uv;
+        pointNormalRight_ = _pointNormal;
         point3dRight_ = _point3d;
         velocityRight_ = cv::Point2f(-1.f, -1.f);
         isStereo = true;
     }
 
-    void rightObservation(const cv::Point2f & _uv, const cv::Point3f & _point3d, const cv::Point2f & _velocity) {
+    void rightObservation(const cv::Point2f & _uv, const cv::Point3f & _pointNormal, const cv::Point3f & _point3d, const cv::Point2f & _velocity) {
         uvRight_ = _uv;
+        pointNormalRight_ = _pointNormal;
         point3dRight_ = _point3d;
         velocityRight_ = _velocity;
         isStereo = true;
     }
 
     cv::Point2f uv_, uvRight_;
-    cv::Point3f point3d_, point3dRight_;
+    cv::Point3f point3d_, point3dRight_, pointNormal_, pointNormalRight_;
     cv::Point2f velocity_, velocityRight_;
     bool isStereo;
 };
 
-class RTABMAP_EXP Featrue {
+class RTABMAP_EXP Feature {
 public:
-    Featrue(std::size_t _featrueId, std::size_t _startFrameId, int _solveState) : featrueId_(_featrueId), startFrameId_(_startFrameId), estimatedDepth_(-1.0), solveState_(_solveState) {}
+    Feature(std::size_t _featureId, std::size_t _startFrameId, int _solveState) : featureId_(_featureId), startFrameId_(_startFrameId), estimatedDepth_(-1.0), solveState_(_solveState) {}
     
     enum eSolveState {
         NOT_SOLVE       = 0,
@@ -139,8 +141,8 @@ public:
         OPTIMIZED       = 3
     };
 
-    std::size_t getTrackedCnt() {return featrueStatusInFrames_.size();}
-    std::size_t getId() {return featrueId_;}
+    std::size_t getTrackedCnt() {return featureStatusInFrames_.size();}
+    std::size_t getId() {return featureId_;}
     std::size_t getStartFrame() {return startFrameId_;}
     double getEstimatedDepth() {return estimatedDepth_;}
     cv::Point3f getEstimatedPose() {return PoseTwc_;}
@@ -148,10 +150,10 @@ public:
     int getSolveState() {return solveState_;}
     void setSolveState(const enum eSolveState & _solveState) {solveState_ = _solveState;}
 
-    std::map<std::size_t, FeatureStatusOfEachFrame> featrueStatusInFrames_;     // <signatrueId, FeatureStatusOfEachFrame> 
+    std::map<std::size_t, FeatureStatusOfEachFrame> featureStatusInFrames_;     // <signatrueId, FeatureStatusOfEachFrame> 
 
 private:
-    std::size_t featrueId_;
+    std::size_t featureId_;
     std::size_t startFrameId_;
     double estimatedDepth_;
     cv::Point3f PoseTwc_;
@@ -162,34 +164,31 @@ class RTABMAP_EXP FeatureManager {
 public:
     FeatureManager(const ParametersMap & _parameters);
     std::size_t getSignatureId();
-    Signature getLastSignature();
-    std::size_t publishSignatrue(const Signature & _signature, TrackerInfo & _trackInfo);
-    std::vector<std::size_t> publishFeatures(const std::vector<cv::KeyPoint> & _kpt, const std::vector<cv::Point3f> & _kpt3d, std::multimap<int, cv::KeyPoint> & _words, std::multimap<int, cv::Point3f> & _words3d, TrackerInfo * _trackInfo);
-    std::vector<std::size_t> publishFeatureStates(const std::multimap<int, cv::KeyPoint> & _words, const std::multimap<int, cv::Point3f> & _words3d, TrackerInfo * _trackInfo);
-    void process(const TrackerInfo & _trackInfo, std::map<std::size_t, Transform> & _framePoseInWorld);
-
-    std::queue<Signature> signaturesBuf_;
-    std::queue<Featrue> featuresBuf_;
-    std::queue<std::pair<std::multimap<int, cv::KeyPoint>, std::multimap<int, cv::Point3f>>> featureStateBuf_;
-
-private:
+    std::size_t addSignatrue(const Signature & _signature);
+    std::vector<std::size_t> addFeature(const std::vector<cv::KeyPoint> & _kpt, const std::vector<cv::Point3f> & _normalPt, const std::vector<cv::Point3f> & _kpt3d, std::multimap<int, cv::KeyPoint> & _words, std::multimap<int, cv::Point3f> & _words3d);
+    std::vector<std::size_t> updateFeature(const std::multimap<int, cv::KeyPoint> & _words, const std::multimap<int, cv::Point3f> &_normalPoint, const std::multimap<int, cv::Point3f> & _words3d);
     bool hasSignature(const std::size_t _id);
     bool hasFeature(const std::size_t _id);
+    Signature getLastSignature();
+    void manageProcess(TrackerInfo & _trackInfo);
+
+    std::list<Feature> features_;
+    std::list<Feature> featuresDisplay_;
+    std::list<Signature> signatures_;
+
+private:
+    bool triangulateByTwoFrames(const Transform & _pose0, const Transform & _pose1, const cv::Point3f & _uv0, const cv::Point3f & _uv1, cv::Point3f & _pointInWord, cv::Point3f & _pointInPose0, cv::Point3f & _pointInPose1);
     bool checkParallax(const TrackerInfo & _trackInfo); //True: keyframe, False: Not keyframe.
     void cleanFeatureAndSignature(bool _keyFrame);
-    void depthRecovery(const std::map<std::size_t, Transform> & _framePoseInWorld);
-    void update(const TrackerInfo & _trackInfo);
-    bool triangulateByTwoFrames(const Transform & _pose0, const Transform & _pose1, const cv::Point2f & _uv0, const cv::Point2f & _uv1, cv::Point3f & _pointInWord, cv::Point3f & _pointInPose0, cv::Point3f & _pointInPose1) const;
+    void depthRecovery();
 
+    bool displayTracker_;
     int optimizationWindowSize_;
+    float minMotion_;
     int maxFeature_;
     float minParallax_;
     ParametersMap parameters_;
-    boost::mutex mutexFeatureProcess_;
-    // boost::mutex mutexDataReadWrite_;
-
-    std::list<Featrue> features_;
-    std::list<Signature> signatures_;
+    // boost::mutex mutexFeatureProcess_;
 
     std::size_t featureId_;
     std::size_t signatureId_;

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1052</width>
-    <height>891</height>
+    <width>976</width>
+    <height>896</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -23,9 +23,9 @@
    <iconset resource="../GuiLib.qrc">
     <normaloff>:/images/RTAB-Map.ico</normaloff>:/images/RTAB-Map.ico</iconset>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout_152">
-   <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0">
+  <layout class="QGridLayout" name="gridLayout_49">
+   <item row="0" column="0">
+    <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,1">
      <property name="spacing">
       <number>0</number>
      </property>
@@ -63,9 +63,9 @@
           <property name="geometry">
            <rect>
             <x>0</x>
-            <y>-435</y>
-            <width>655</width>
-            <height>3297</height>
+            <y>-360</y>
+            <width>680</width>
+            <height>3270</height>
            </rect>
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_16">
@@ -95,7 +95,7 @@
                 <enum>QFrame::Raised</enum>
                </property>
                <property name="currentIndex">
-                <number>19</number>
+                <number>5</number>
                </property>
                <widget class="QWidget" name="page_22">
                 <layout class="QVBoxLayout" name="verticalLayout_29" stretch="0,1">
@@ -13366,7 +13366,7 @@ If set to false, classic RTAB-Map loop closure detection is done using only imag
                     <item>
                      <widget class="QStackedWidget" name="stackedWidget_odometryType">
                       <property name="currentIndex">
-                       <number>10</number>
+                       <number>0</number>
                       </property>
                       <widget class="QWidget" name="page_52">
                        <layout class="QVBoxLayout" name="verticalLayout_77">
@@ -15759,29 +15759,17 @@ If set to false, classic RTAB-Map loop closure detection is done using only imag
                               <string>Image processing</string>
                              </property>
                              <layout class="QGridLayout" name="gridLayout_103" columnstretch="0,1">
-                              <item row="8" column="1">
-                               <widget class="QLabel" name="label_495">
-                                <property name="text">
-                                 <string>Tracking precision.</string>
-                                </property>
-                                <property name="wordWrap">
-                                 <bool>true</bool>
-                                </property>
-                                <property name="textInteractionFlags">
-                                 <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
+                              <item row="0" column="0">
+                               <widget class="QSpinBox" name="OdomMSCKFGridRow">
+                                <property name="minimum">
+                                 <number>1</number>
                                 </property>
                                </widget>
                               </item>
-                              <item row="2" column="0">
-                               <widget class="QSpinBox" name="OdomMSCKFGridMinFeatureNum"/>
-                              </item>
-                              <item row="3" column="0">
-                               <widget class="QSpinBox" name="OdomMSCKFGridMaxFeatureNum"/>
-                              </item>
-                              <item row="7" column="1">
-                               <widget class="QLabel" name="label_531">
+                              <item row="0" column="1">
+                               <widget class="QLabel" name="label_538">
                                 <property name="text">
-                                 <string>Max iteration.</string>
+                                 <string>Grid row.</string>
                                 </property>
                                 <property name="wordWrap">
                                  <bool>true</bool>
@@ -15798,6 +15786,67 @@ If set to false, classic RTAB-Map loop closure detection is done using only imag
                                 </property>
                                </widget>
                               </item>
+                              <item row="1" column="1">
+                               <widget class="QLabel" name="label_537">
+                                <property name="text">
+                                 <string>Grid col.</string>
+                                </property>
+                                <property name="wordWrap">
+                                 <bool>true</bool>
+                                </property>
+                                <property name="textInteractionFlags">
+                                 <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="2" column="0">
+                               <widget class="QSpinBox" name="OdomMSCKFGridMinFeatureNum"/>
+                              </item>
+                              <item row="2" column="1">
+                               <widget class="QLabel" name="label_536">
+                                <property name="text">
+                                 <string>Grid min feature num.</string>
+                                </property>
+                                <property name="wordWrap">
+                                 <bool>true</bool>
+                                </property>
+                                <property name="textInteractionFlags">
+                                 <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="3" column="0">
+                               <widget class="QSpinBox" name="OdomMSCKFGridMaxFeatureNum"/>
+                              </item>
+                              <item row="3" column="1">
+                               <widget class="QLabel" name="label_535">
+                                <property name="text">
+                                 <string>Grid max feature num.</string>
+                                </property>
+                                <property name="wordWrap">
+                                 <bool>true</bool>
+                                </property>
+                                <property name="textInteractionFlags">
+                                 <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="4" column="0">
+                               <widget class="QSpinBox" name="OdomMSCKFPyramidLevels"/>
+                              </item>
+                              <item row="4" column="1">
+                               <widget class="QLabel" name="label_534">
+                                <property name="text">
+                                 <string>Pyramid levels.</string>
+                                </property>
+                                <property name="wordWrap">
+                                 <bool>true</bool>
+                                </property>
+                                <property name="textInteractionFlags">
+                                 <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
+                                </property>
+                               </widget>
+                              </item>
                               <item row="5" column="0">
                                <widget class="QSpinBox" name="OdomMSCKFPatchSize">
                                 <property name="minimum">
@@ -15805,13 +15854,71 @@ If set to false, classic RTAB-Map loop closure detection is done using only imag
                                 </property>
                                </widget>
                               </item>
+                              <item row="5" column="1">
+                               <widget class="QLabel" name="label_533">
+                                <property name="text">
+                                 <string>Patch size.</string>
+                                </property>
+                                <property name="wordWrap">
+                                 <bool>true</bool>
+                                </property>
+                                <property name="textInteractionFlags">
+                                 <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="6" column="0">
+                               <widget class="QSpinBox" name="OdomMSCKFFastThreshold"/>
+                              </item>
+                              <item row="6" column="1">
+                               <widget class="QLabel" name="label_532">
+                                <property name="text">
+                                 <string>Fast threshold.</string>
+                                </property>
+                                <property name="wordWrap">
+                                 <bool>true</bool>
+                                </property>
+                                <property name="textInteractionFlags">
+                                 <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
+                                </property>
+                               </widget>
+                              </item>
                               <item row="7" column="0">
                                <widget class="QSpinBox" name="OdomMSCKFMaxIteration"/>
                               </item>
-                              <item row="2" column="1">
-                               <widget class="QLabel" name="label_536">
+                              <item row="7" column="1">
+                               <widget class="QLabel" name="label_531">
                                 <property name="text">
-                                 <string>Grid min feature num.</string>
+                                 <string>Max iteration.</string>
+                                </property>
+                                <property name="wordWrap">
+                                 <bool>true</bool>
+                                </property>
+                                <property name="textInteractionFlags">
+                                 <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="8" column="0">
+                               <widget class="QDoubleSpinBox" name="OdomMSCKFTrackPrecision">
+                                <property name="minimum">
+                                 <double>0.000000000000000</double>
+                                </property>
+                                <property name="maximum">
+                                 <double>1.000000000000000</double>
+                                </property>
+                                <property name="singleStep">
+                                 <double>0.100000000000000</double>
+                                </property>
+                                <property name="value">
+                                 <double>0.500000000000000</double>
+                                </property>
+                               </widget>
+                              </item>
+                              <item row="8" column="1">
+                               <widget class="QLabel" name="label_495">
+                                <property name="text">
+                                 <string>Tracking precision.</string>
                                 </property>
                                 <property name="wordWrap">
                                  <bool>true</bool>
@@ -15840,23 +15947,10 @@ If set to false, classic RTAB-Map loop closure detection is done using only imag
                                 </property>
                                </widget>
                               </item>
-                              <item row="6" column="1">
-                               <widget class="QLabel" name="label_532">
+                              <item row="9" column="1">
+                               <widget class="QLabel" name="label_496">
                                 <property name="text">
-                                 <string>Fast threshold.</string>
-                                </property>
-                                <property name="wordWrap">
-                                 <bool>true</bool>
-                                </property>
-                                <property name="textInteractionFlags">
-                                 <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
-                                </property>
-                               </widget>
-                              </item>
-                              <item row="3" column="1">
-                               <widget class="QLabel" name="label_535">
-                                <property name="text">
-                                 <string>Grid max feature num.</string>
+                                 <string>Ransac treshold.</string>
                                 </property>
                                 <property name="wordWrap">
                                  <bool>true</bool>
@@ -15885,48 +15979,6 @@ If set to false, classic RTAB-Map loop closure detection is done using only imag
                                 </property>
                                </widget>
                               </item>
-                              <item row="4" column="1">
-                               <widget class="QLabel" name="label_534">
-                                <property name="text">
-                                 <string>Pyramid levels.</string>
-                                </property>
-                                <property name="wordWrap">
-                                 <bool>true</bool>
-                                </property>
-                                <property name="textInteractionFlags">
-                                 <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
-                                </property>
-                               </widget>
-                              </item>
-                              <item row="8" column="0">
-                               <widget class="QDoubleSpinBox" name="OdomMSCKFTrackPrecision">
-                                <property name="minimum">
-                                 <double>0.000000000000000</double>
-                                </property>
-                                <property name="maximum">
-                                 <double>1.000000000000000</double>
-                                </property>
-                                <property name="singleStep">
-                                 <double>0.100000000000000</double>
-                                </property>
-                                <property name="value">
-                                 <double>0.500000000000000</double>
-                                </property>
-                               </widget>
-                              </item>
-                              <item row="0" column="1">
-                               <widget class="QLabel" name="label_538">
-                                <property name="text">
-                                 <string>Grid row.</string>
-                                </property>
-                                <property name="wordWrap">
-                                 <bool>true</bool>
-                                </property>
-                                <property name="textInteractionFlags">
-                                 <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
-                                </property>
-                               </widget>
-                              </item>
                               <item row="10" column="1">
                                <widget class="QLabel" name="label_497">
                                 <property name="text">
@@ -15937,58 +15989,6 @@ If set to false, classic RTAB-Map loop closure detection is done using only imag
                                 </property>
                                 <property name="textInteractionFlags">
                                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
-                                </property>
-                               </widget>
-                              </item>
-                              <item row="9" column="1">
-                               <widget class="QLabel" name="label_496">
-                                <property name="text">
-                                 <string>Ransac treshold.</string>
-                                </property>
-                                <property name="wordWrap">
-                                 <bool>true</bool>
-                                </property>
-                                <property name="textInteractionFlags">
-                                 <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
-                                </property>
-                               </widget>
-                              </item>
-                              <item row="1" column="1">
-                               <widget class="QLabel" name="label_537">
-                                <property name="text">
-                                 <string>Grid col.</string>
-                                </property>
-                                <property name="wordWrap">
-                                 <bool>true</bool>
-                                </property>
-                                <property name="textInteractionFlags">
-                                 <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
-                                </property>
-                               </widget>
-                              </item>
-                              <item row="5" column="1">
-                               <widget class="QLabel" name="label_533">
-                                <property name="text">
-                                 <string>Patch size.</string>
-                                </property>
-                                <property name="wordWrap">
-                                 <bool>true</bool>
-                                </property>
-                                <property name="textInteractionFlags">
-                                 <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
-                                </property>
-                               </widget>
-                              </item>
-                              <item row="6" column="0">
-                               <widget class="QSpinBox" name="OdomMSCKFFastThreshold"/>
-                              </item>
-                              <item row="4" column="0">
-                               <widget class="QSpinBox" name="OdomMSCKFPyramidLevels"/>
-                              </item>
-                              <item row="0" column="0">
-                               <widget class="QSpinBox" name="OdomMSCKFGridRow">
-                                <property name="minimum">
-                                 <number>1</number>
                                 </property>
                                </widget>
                               </item>
@@ -16542,227 +16542,6 @@ If set to false, classic RTAB-Map loop closure detection is done using only imag
                         </item>
                        </layout>
                       </widget>
-                      <widget class="QWidget" name="page_87">
-                       <widget class="QGroupBox" name="groupBox_odomVISFS">
-                        <property name="geometry">
-                         <rect>
-                          <x>0</x>
-                          <y>0</y>
-                          <width>604</width>
-                          <height>619</height>
-                         </rect>
-                        </property>
-                        <property name="title">
-                         <string>VISFS</string>
-                        </property>
-                        <layout class="QGridLayout" name="gridLayout_49">
-                         <item row="0" column="0">
-                          <widget class="QCheckBox" name="OdomVISFSFlowBack">
-                           <property name="text">
-                            <string/>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="0" column="1">
-                          <widget class="QLabel" name="label_603">
-                           <property name="text">
-                            <string>Display the detail imformation in tracking process.</string>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="1" column="0">
-                          <widget class="QCheckBox" name="OdomVISFSDisplayTracker">
-                           <property name="text">
-                            <string/>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="1" column="1">
-                          <widget class="QLabel" name="label_604">
-                           <property name="text">
-                            <string>The maximum number of key points will be generated.</string>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="2" column="0">
-                          <widget class="QSpinBox" name="OdomVISFSMaxFeatures"/>
-                         </item>
-                         <item row="2" column="1">
-                          <widget class="QLabel" name="label_605">
-                           <property name="text">
-                            <string>Perform backward optical flow to improve feature tracking accuracy.</string>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="3" column="0">
-                          <widget class="QDoubleSpinBox" name="OdomVISFSMinParallax"/>
-                         </item>
-                         <item row="3" column="1">
-                          <widget class="QLabel" name="label_606">
-                           <property name="text">
-                            <string>Keyframe selection threshold (pixel).</string>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="4" column="0">
-                          <widget class="QDoubleSpinBox" name="OdomVISFSMaxDepth"/>
-                         </item>
-                         <item row="4" column="1">
-                          <widget class="QLabel" name="label_607">
-                           <property name="text">
-                            <string>Max depth of the features (0 means no limit).</string>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="5" column="0">
-                          <widget class="QDoubleSpinBox" name="OdomVISFSMinDepth"/>
-                         </item>
-                         <item row="5" column="1">
-                          <widget class="QLabel" name="label_608">
-                           <property name="text">
-                            <string>Min depth of the features (0 means no limit).</string>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="6" column="0">
-                          <widget class="QSpinBox" name="OdomVISFSFlowWinSize"/>
-                         </item>
-                         <item row="6" column="1">
-                          <widget class="QLabel" name="label_609">
-                           <property name="text">
-                            <string>Size of the search window at each pyramid level.</string>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="7" column="0">
-                          <widget class="QSpinBox" name="OdomVISFSFlowIterations"/>
-                         </item>
-                         <item row="7" column="1">
-                          <widget class="QLabel" name="label_610">
-                           <property name="text">
-                            <string>Termination criteria of the max interation times.</string>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="8" column="0">
-                          <widget class="QDoubleSpinBox" name="OdomVISFSFlowEps"/>
-                         </item>
-                         <item row="8" column="1">
-                          <widget class="QLabel" name="label_611">
-                           <property name="text">
-                            <string>Termination criteria of the search window moves by less than criteria.epsilon</string>
-                           </property>
-                           <property name="wordWrap">
-                            <bool>true</bool>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="9" column="0">
-                          <widget class="QSpinBox" name="OdomVISFSFlowMaxLevel"/>
-                         </item>
-                         <item row="9" column="1">
-                          <widget class="QLabel" name="label_612">
-                           <property name="text">
-                            <string>Maximal pyramid level number; if set to 0, pyramids are not used (single level)</string>
-                           </property>
-                           <property name="wordWrap">
-                            <bool>true</bool>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="10" column="0">
-                          <widget class="QCheckBox" name="OdomVISFSCullByFundationMatrix">
-                           <property name="text">
-                            <string/>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="10" column="1">
-                          <widget class="QLabel" name="label_613">
-                           <property name="text">
-                            <string>Use fundation matrix to cull out the outliers in the result of feature match.</string>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="11" column="0">
-                          <widget class="QDoubleSpinBox" name="OdomVISFSFundationPixelError"/>
-                         </item>
-                         <item row="11" column="1">
-                          <widget class="QLabel" name="label_614">
-                           <property name="text">
-                            <string>Threshold of fundation matrix calculate error.</string>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="12" column="0">
-                          <widget class="QSpinBox" name="OdomVISFSMinInliers"/>
-                         </item>
-                         <item row="12" column="1">
-                          <widget class="QLabel" name="label_615">
-                           <property name="text">
-                            <string>Minimal inliers between two images.</string>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="13" column="0">
-                          <widget class="QSpinBox" name="OdomVISFSPnPIterations"/>
-                         </item>
-                         <item row="13" column="1">
-                          <widget class="QLabel" name="label_616">
-                           <property name="text">
-                            <string>Maximal interation times in ransac.</string>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="14" column="0">
-                          <widget class="QDoubleSpinBox" name="OdomVISFSPnPReprojError"/>
-                         </item>
-                         <item row="14" column="1">
-                          <widget class="QLabel" name="label_617">
-                           <property name="text">
-                            <string>PnP reprojection error.</string>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="15" column="0">
-                          <widget class="QSpinBox" name="OdomVISFSPnPFlags"/>
-                         </item>
-                         <item row="15" column="1">
-                          <widget class="QLabel" name="label_618">
-                           <property name="text">
-                            <string>PnP flags: 0=Iterative, 1=EPNP, 2=P3P.</string>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="16" column="0">
-                          <widget class="QSpinBox" name="OdomVISFSBundleAdjustment"/>
-                         </item>
-                         <item row="16" column="1">
-                          <widget class="QLabel" name="label_619">
-                           <property name="text">
-                            <string>Optimization with bundle adjustment: 0=disabled, 1=g2o, 2=cvsba, 3=Ceres.</string>
-                           </property>
-                           <property name="wordWrap">
-                            <bool>true</bool>
-                           </property>
-                          </widget>
-                         </item>
-                         <item row="17" column="0">
-                          <widget class="QSpinBox" name="OdomVISFSOptimizationWindowSize"/>
-                         </item>
-                         <item row="17" column="1">
-                          <widget class="QLabel" name="label_620">
-                           <property name="text">
-                            <string>The optimazation windows size which determing the maintance of variables.</string>
-                           </property>
-                           <property name="wordWrap">
-                            <bool>true</bool>
-                           </property>
-                          </widget>
-                         </item>
-                        </layout>
-                       </widget>
-                      </widget>
                       <widget class="QWidget" name="page_26">
                        <layout class="QVBoxLayout" name="verticalLayout_88">
                         <item>
@@ -16946,7 +16725,7 @@ If set to false, classic RTAB-Map loop closure detection is done using only imag
                     <item>
                      <widget class="QStackedWidget" name="stackedWidget_odometryFiltering">
                       <property name="currentIndex">
-                       <number>2</number>
+                       <number>1</number>
                       </property>
                       <widget class="QWidget" name="page_31">
                        <layout class="QVBoxLayout" name="verticalLayout_84"/>
@@ -22280,7 +22059,7 @@ Lower the ratio -&gt; higher the precision.</string>
      </item>
     </layout>
    </item>
-   <item>
+   <item row="1" column="0">
     <layout class="QHBoxLayout" name="horizontalLayout_3">
      <item>
       <widget class="QRadioButton" name="radioButton_basic">

@@ -41,29 +41,35 @@ namespace rtabmap {
 class RTABMAP_EXP FeatureTracker {
 
 public:
-    FeatureTracker(const ParametersMap & _parameters, FeatureManager * _featureManager);
+    FeatureTracker(const ParametersMap & _parameters);
     virtual ~FeatureTracker();
 
-	Transform computeTransformation(const Signature & _fromSignature, const Signature & _toSignature, Transform _guess = Transform::getIdentity(), TrackerInfo * _info = nullptr) const;
-  	Transform computeTransformation(const SensorData & _fromSignature, const SensorData & _toSignature, Transform _guess = Transform::getIdentity(), TrackerInfo * _info = nullptr) const;
-    Transform computeTransformationMod(Signature & _fromSignature, Signature & _toSignature, Transform _guess = Transform::getIdentity(), TrackerInfo * _info = nullptr) const;
+	Transform computeTransformation(const Signature & _fromSignature, const Signature & _toSignature, Transform _guess = Transform::getIdentity(), TrackerInfo * _info = nullptr);
+  	Transform computeTransformation(const SensorData & _fromSignature, const SensorData & _toSignature, Transform _guess = Transform::getIdentity(), TrackerInfo * _info = nullptr);
+    Transform computeTransformationMod(Signature & _fromSignature, Signature & _toSignature, Transform _guess = Transform::getIdentity(), TrackerInfo * _info = nullptr);
+	void displayTracker(int _n, ...) const;
+
+	FeatureManager * featureManager_;
+	bool displayTracker_;
+	std::vector<cv::Mat> imagesToDisplay_;
+	std::vector<std::vector<cv::Point2f>> cornersToDisplay_;
+	std::vector<unsigned char> statusToDisplay_;
 
 private:
 	std::vector<cv::Point3f> generateKeyPoints3D(const SensorData & _data, const std::vector<cv::KeyPoint> & _keyPoints) const;
 	std::vector<cv::Point3f> points2NormalizedPlane(const std::vector<cv::Point2f> & _points, const CameraModel & _cameraModel) const;
+	std::vector<cv::Point3f> points2NormalizedPlane(const std::vector<cv::KeyPoint> & _points, const CameraModel & _cameraModel) const;
+	std::multimap<int, cv::Point3f> points2NormalizedPlane(const std::multimap<int, cv::KeyPoint> & _words, const CameraModel & _cameraModel) const;
 	std::vector<cv::Point2f> points2VirtualImage(const std::vector<cv::Point3f> & _points) const;
 	void rejectOutlierWithFundationMatrix(const std::vector<cv::Point2f> & _cornersFrom, const std::vector<cv::Point2f> & _cornersTo, std::vector<unsigned char> & _status) const;
 	inline float distanceL2(const cv::Point2f & pt1, const cv::Point2f & pt2) const;
-	void displayTracker(int _n, ...) const;
 
 private:
 	const double COVARIANCE_EPSILON = 0.000000001;
 
 	ParametersMap parameters_;
-	FeatureManager * featureManager_;
 	
 	bool force3DoF_;
-	bool displayTracker_;
 	int maxFeatures_;
 	double qualityLevel_;
 	int minDistance_;
