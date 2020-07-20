@@ -565,6 +565,7 @@ class RTABMAP_EXP Parameters
     RTABMAP_PARAM(OdomVISFS, MaxFeatures,           int,    300,    "The maximum number of key points will be generated.");
     RTABMAP_PARAM(OdomVISFS, FlowBack,              bool,   true,   "Perform backward optical flow to improve feature tracking accuracy.");
     RTABMAP_PARAM(OdomVISFS, MinParallax,           float,  10.0,   "Keyframe selection threshold (pixel).");
+    RTABMAP_PARAM(OdomVISFS, DepthMask,		    bool,   true,   "Use depth iamge to generate mask to extract key point.");
     RTABMAP_PARAM(OdomVISFS, MaxDepth,              float,  5.0,    "Max depth of the features (0 means no limit).");
     RTABMAP_PARAM(OdomVISFS, MinDepth,              float,  0.2,    "Min depth of the features (0 means no limit).");
     RTABMAP_PARAM(OdomVISFS, FlowWinSize,           int,    18,     "Size of the search window at each pyramid level.");
@@ -583,6 +584,7 @@ class RTABMAP_EXP Parameters
 #else
     RTABMAP_PARAM(OdomVISFS, BundleAdjustment,      int, 0,      "Optimization with bundle adjustment: 0=disabled, 1=g2o, 2=cvsba, 3=Ceres.");
 #endif
+    RTABMAP_PARAM(OdomVISFS, DepthRecovery,         bool, true,  "Calculate the point with no depth in depth image.");
     RTABMAP_PARAM(OdomVISFS, OptimizationWindowSize,    int, 10,    "The optimazation windows size which determing the maintance of variables.");
     RTABMAP_PARAM(OdomVISFS, MinMotion,             float,  0.08,   "Min motion between two frames to calculate the word's depth.");
 

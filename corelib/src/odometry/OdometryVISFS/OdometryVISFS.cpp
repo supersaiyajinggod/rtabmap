@@ -32,8 +32,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace rtabmap {
 
-OdometryVISFS::OdometryVISFS(const ParametersMap & _parameters) : Odometry(_parameters) {
+OdometryVISFS::OdometryVISFS(const ParametersMap & _parameters) : 
+     Odometry(_parameters),
+     depthRecovery_(Parameters::defaultOdomVISFSDepthRecovery()) {
      parameters_ = _parameters;
+
+     Parameters::parse(parameters_, Parameters::kOdomVISFSDepthRecovery(), depthRecovery_);
+
      featureTracker_ = new FeatureTracker(parameters_);
 
 }
@@ -73,22 +78,27 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
           // TODO: If set use icp for fake laser scan, do some prepare works.
           // OdometryVISFS
           // Signature tmpRefFrame = lastFrame_;
-          Signature tmpRefFrame = featureManager->getLastSignature();
-          // UINFO("tmpRefFrame.sensorData().isValid() = %d, tmpRefFrame.id() = %d, lastFrame.id()");
-          if (!(tmpRefFrame.sensorData().isValid() && (tmpRefFrame.id() == lastFrame_.id()))) {
+          Signature tmpRefFrame;
+          if (depthRecovery_) {
+               tmpRefFrame = featureManager->getLastSignature();
+               if (!(tmpRefFrame.sensorData().isValid() && (tmpRefFrame.id() == lastFrame_.id()))) {
+                    tmpRefFrame = lastFrame_;
+                    UINFO("use lastFrame ......");
+               }
+          } else {
                tmpRefFrame = lastFrame_;
-               UINFO("use lastFrame ......");
           }
+
           output = featureTracker_->computeTransformationMod(tmpRefFrame, newFrame, _guess.isNull()?motionSinceLastFrame*_guess:Transform(), &trackInfo);
 
           // If failed, recompute with no guess.
           if (output.isNull()) {
                UINFO("Trial failed. ~~~!!!~~~");
-               // tmpRefFrame = lastFrame_;
-               Signature tmpRefFrame = featureManager->getLastSignature();
-               if (!(tmpRefFrame.sensorData().isValid() && (tmpRefFrame.id() == lastFrame_.id()))) {
-                    tmpRefFrame = lastFrame_;
-               }
+               tmpRefFrame = lastFrame_;
+               // Signature tmpRefFrame = featureManager->getLastSignature();
+               // if (!(tmpRefFrame.sensorData().isValid() && (tmpRefFrame.id() == lastFrame_.id()))) {
+               //      tmpRefFrame = lastFrame_;
+               // }
 			// Reset matches, but keep already extracted features in newFrame.sensorData()
 			newFrame.setWords(std::multimap<int, cv::KeyPoint>());
 			newFrame.setWords3(std::multimap<int, cv::Point3f>());
@@ -138,7 +148,6 @@ Transform OdometryVISFS::computeTransform(SensorData & _data, const Transform & 
      std::size_t signatureId =  featureManager->getSignatureId();
      _data.setId(signatureId);
      newFrame.setId(signatureId);
-     UINFO("trackInfo.globalPose=%s", trackInfo.globalPose.prettyPrint().c_str());
      newFrame.setPose(trackInfo.globalPose);
      featureManager->addSignatrue(newFrame);
      trackInfo.signatureId = signatureId;

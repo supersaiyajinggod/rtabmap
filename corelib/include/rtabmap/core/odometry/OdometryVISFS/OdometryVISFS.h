@@ -51,6 +51,7 @@ private:
     //private variable
     Transform lastFramePose_;
     Signature lastFrame_;
+	bool depthRecovery_;
 	ParametersMap parameters_;
 
     // StateEstimator * stateEstimator_;

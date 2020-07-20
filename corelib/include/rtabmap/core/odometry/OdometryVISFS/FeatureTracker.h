@@ -56,6 +56,7 @@ public:
 	std::vector<unsigned char> statusToDisplay_;
 
 private:
+	void generateDepthMask(const cv::Mat & depthImage, cv::Mat & mask);
 	std::vector<cv::Point3f> generateKeyPoints3D(const SensorData & _data, const std::vector<cv::KeyPoint> & _keyPoints) const;
 	std::vector<cv::Point3f> points2NormalizedPlane(const std::vector<cv::Point2f> & _points, const CameraModel & _cameraModel) const;
 	std::vector<cv::Point3f> points2NormalizedPlane(const std::vector<cv::KeyPoint> & _points, const CameraModel & _cameraModel) const;
@@ -74,6 +75,7 @@ private:
 	double qualityLevel_;
 	int minDistance_;
 	bool flowBack_;
+	bool depthMask_;
 	float maxDepth_;
 	float minDepth_;
 	int flowWinSize_;
@@ -88,6 +90,7 @@ private:
 	int pnpFlags_;
 	int refineIterations_;
 	int bundleAdjustment_;
+	bool depthRecovery_;
 	ParametersMap bundleParameters_;
 
 };

@@ -183,6 +183,7 @@ private:
     void depthRecovery();
 
     bool displayTracker_;
+    bool depthRecovery_;
     int optimizationWindowSize_;
     float minMotion_;
     int maxFeature_;

@@ -33,6 +33,7 @@ namespace rtabmap {
 
 FeatureManager::FeatureManager(const ParametersMap & _parameters) : 
 	displayTracker_(Parameters::defaultOdomVISFSDisplayTracker()),
+	depthRecovery_(Parameters::defaultOdomVISFSDepthRecovery()),
 	optimizationWindowSize_(Parameters::defaultOdomVISFSOptimizationWindowSize()),
 	minMotion_(Parameters::defaultOdomVISFSMinMotion()),
 	maxFeature_(Parameters::defaultOdomVISFSMaxFeatures()),
@@ -40,6 +41,7 @@ FeatureManager::FeatureManager(const ParametersMap & _parameters) :
 	featureId_(0),
 	signatureId_(0) {
 	Parameters::parse(_parameters, Parameters::kOdomVISFSDisplayTracker(), displayTracker_);
+	Parameters::parse(_parameters, Parameters::kOdomVISFSDepthRecovery(), depthRecovery_);
 	Parameters::parse(_parameters, Parameters::kOdomVISFSOptimizationWindowSize(), optimizationWindowSize_);
 	Parameters::parse(_parameters, Parameters::kOdomVISFSMinMotion(), minMotion_);
 	Parameters::parse(_parameters, Parameters::kOdomVISFSMaxFeatures(), maxFeature_);
@@ -57,6 +59,9 @@ std::size_t FeatureManager::addSignatrue(const Signature & _signature) {
     // boost::lock_guard<boost::mutex> lock(mutexFeatureProcess_);
     signatures_.push_back(_signature);
 	++signatureId_;
+	// for (auto signature : signatures_) {
+	// 	UINFO("######signature info, id: %d, pose: %s", signature.id(), signature.getPose().prettyPrint().c_str());
+	// }
 	return signatureId_ - 1;
 }
 
@@ -192,41 +197,55 @@ void FeatureManager::depthRecovery() {
 	if (displayTracker_) { featuresDisplay_.clear(); }
 
 	const auto lastSignatureIt = signatures_.rbegin();
+	const auto Trc = lastSignatureIt->sensorData().cameraModels()[0].localTransform();
 	std::multimap<int, cv::Point3f> word3d = lastSignatureIt->getWords3();
+
 	for (auto feature : features_) {
 		if (feature.getSolveState() == Feature::FROM_DEPTH && std::isfinite(feature.featureStatusInFrames_.rbegin()->second.point3d_.z)) {
 			continue;
 		}
 
-		if ((feature.getSolveState() == Feature::NOT_SOLVE || feature.getSolveState() == Feature::FROM_CALCULATE || (feature.getSolveState() == Feature::FROM_DEPTH && !std::isfinite(feature.featureStatusInFrames_.rbegin()->second.point3d_.z))) && (feature.getTrackedCnt() > 2)) {
-			auto latestIt = feature.featureStatusInFrames_.rbegin();
-			auto tmp = latestIt;
-			auto secondLatestIt = ++tmp; 
-			const int latestSignatureId = static_cast<int>(latestIt->first);
-			const int secondLatestsignatureId = static_cast<int>(secondLatestIt->first);
-			const auto lastSignatureIt = std::find_if(signatures_.begin(), signatures_.end(), [latestSignatureId] (Signature & signature) {
+		if ((feature.getSolveState() == Feature::NOT_SOLVE || feature.getSolveState() == Feature::FROM_CALCULATE || (feature.getSolveState() == Feature::FROM_DEPTH && !std::isfinite(feature.featureStatusInFrames_.rbegin()->second.point3d_.z))) && (feature.getTrackedCnt() > 10)) {
+			auto latestFeatureIt = feature.featureStatusInFrames_.rbegin();
+			const int latestSignatureId = static_cast<int>(latestFeatureIt->first);
+			const auto lastSignatureIt = std::find_if(signatures_.begin(), signatures_.end(), [latestSignatureId] (Signature signature) {
 				return latestSignatureId == signature.id();
 			});
-			const auto secondLatestSignatureIt = std::find_if(signatures_.begin(), signatures_.end(), [secondLatestsignatureId] (Signature & signature) {
-				return secondLatestsignatureId == signature.id();
-			});		
 
-			if (lastSignatureIt != signatures_.end() && secondLatestSignatureIt != signatures_.end()) {
-				const Transform latestPose = lastSignatureIt->getPose();
-				const Transform secondLatestPose = secondLatestSignatureIt->getPose();
-				UINFO("secondLatestsignatureId: %d, latestSignatureId: %d.", secondLatestsignatureId, latestSignatureId);
-				UINFO("secondLatestPose : %s latestPose : %s", secondLatestPose.prettyPrint().c_str(), latestPose.prettyPrint().c_str());
-				if (latestPose.getDistance(secondLatestPose) > minMotion_) {
+			std::list<rtabmap::Signature>::iterator oldSignatureIt = signatures_.end();
+			std::map<std::size_t, rtabmap::FeatureStatusOfEachFrame>::iterator oldFeatureStatusIt = feature.featureStatusInFrames_.end();
+			for (auto featureStatusIt = feature.featureStatusInFrames_.begin(); featureStatusIt != feature.featureStatusInFrames_.end(); ++featureStatusIt) {
+				const int signatureId = static_cast<int>(featureStatusIt->first);
+				const auto signatureIt = std::find_if(signatures_.begin(), signatures_.end(), [signatureId] (Signature signature) {
+					return signatureId == signature.id();
+				});
+				if (signatureIt != signatures_.end()) {
+					oldSignatureIt = signatureIt;
+					oldFeatureStatusIt = featureStatusIt;
+					break;
+				}
+			}
+
+			if (lastSignatureIt != signatures_.end() && oldSignatureIt != signatures_.end()) {
+				const Transform latestPose = lastSignatureIt->getPose()*Trc;
+				const Transform oldPose = oldSignatureIt->getPose()*Trc;
+				// UINFO("oldSignatureId: %d, latestSignatureId: %d.", oldSignatureIt->id(), lastSignatureIt->id());
+				// UINFO("oldPose : %s latestPose : %s", oldPose.prettyPrint().c_str(), latestPose.prettyPrint().c_str());
+				if (latestPose.getDistance(oldPose) > minMotion_) {
 					cv::Point3f pointInWorld;
-					cv::Point3f pointInSecondLatest;
+					cv::Point3f pointInOld;
 					cv::Point3f pointInLatest;
-					triangulateByTwoFrames(secondLatestPose, latestPose, secondLatestIt->second.pointNormal_, secondLatestIt->second.pointNormal_,
-											pointInWorld, pointInSecondLatest, pointInLatest);
+					triangulateByTwoFrames(oldPose, latestPose, oldFeatureStatusIt->second.pointNormal_, latestFeatureIt->second.pointNormal_,
+											pointInWorld, pointInOld, pointInLatest);
+					
+					if (pointInLatest.z < 3.f || pointInLatest.z > 20.f)
+						continue;
+
 					feature.setEstimatePose(pointInWorld);
-					UINFO("secondLatestPose : %s \nlatestPose : %s \npointInLatest: %f, %f, %f", secondLatestPose.prettyPrint().c_str(), latestPose.prettyPrint().c_str(), pointInLatest.x, pointInLatest.y, pointInLatest.z);
+					// UINFO("oldPose : %s \nlatestPose : %s \npointInLatest: %f, %f, %f", oldPose.prettyPrint().c_str(), latestPose.prettyPrint().c_str(), pointInLatest.x, pointInLatest.y, pointInLatest.z);
 					// Update features_
-					secondLatestIt->second.point3d_ = pointInSecondLatest;
-					latestIt->second.point3d_ = pointInLatest;
+					latestFeatureIt->second.point3d_ = pointInLatest;
+					oldFeatureStatusIt->second.point3d_ = pointInOld;
 					// Update sigantures_
 					if (latestSignatureId == lastSignatureIt->id()) {
 						auto wordIt = word3d.find(static_cast<int>(feature.getId()));
@@ -234,92 +253,132 @@ void FeatureManager::depthRecovery() {
 							wordIt->second = pointInLatest;
 					}
 					feature.setSolveState(Feature::FROM_CALCULATE);
+					// display
+					if (displayTracker_ && !(feature.getSolveState() == Feature::FROM_DEPTH)) {
+						if (lastSignatureIt->id() == static_cast<int>(feature.featureStatusInFrames_.rbegin()->first))
+							featuresDisplay_.push_back(feature);
+					}
+
 				} 
 			}
 		}
 
-		if ((feature.getSolveState() == Feature::FROM_CALCULATE) && (feature.getTrackedCnt() > 4)) {
-			Eigen::MatrixXf svdA(static_cast<int>(2*feature.getTrackedCnt()), 4);
-			int avaliableCnt = 0;
-			int svdIndex = 0;
-			for (auto it = feature.featureStatusInFrames_.begin(); it != feature.featureStatusInFrames_.end(); ++it) {
-				const int signatureId = static_cast<int>(it->first);
-				const auto findSignature = std::find_if(signatures_.begin(), signatures_.end(), [signatureId] (Signature & signature) {
-					return signatureId == signature.id();
-				});
-				if (findSignature != signatures_.end()) {
-					const Eigen::Matrix4f pose = findSignature->getPose().toEigen4f();
-					Eigen::Matrix<float, 3, 4> Tcw;
-					Tcw.leftCols<3>() = pose.topLeftCorner(3, 3).transpose();
-					Tcw.rightCols<1>() = -Tcw.leftCols<3>()*pose.topRightCorner(3, 1);
+		// if (!(feature.getSolveState() == Feature::FROM_DEPTH) && (feature.getTrackedCnt() > 30)) {
+		// 	//	Check there is a enough translation.
+		// 	{
+		// 		auto latestFeatureIt = feature.featureStatusInFrames_.rbegin();
+		// 		const int latestSignatureId = static_cast<int>(latestFeatureIt->first);
+		// 		const auto lastSignatureIt = std::find_if(signatures_.begin(), signatures_.end(), [latestSignatureId] (Signature signature) {
+		// 			return latestSignatureId == signature.id();
+		// 		});
+
+		// 		std::list<rtabmap::Signature>::iterator oldSignatureIt = signatures_.end();
+		// 		std::map<std::size_t, rtabmap::FeatureStatusOfEachFrame>::iterator oldFeatureStatusIt = feature.featureStatusInFrames_.end();
+		// 		for (auto featureStatusIt = feature.featureStatusInFrames_.begin(); featureStatusIt != feature.featureStatusInFrames_.end(); ++featureStatusIt) {
+		// 			const int signatureId = static_cast<int>(featureStatusIt->first);
+		// 			const auto signatureIt = std::find_if(signatures_.begin(), signatures_.end(), [signatureId] (Signature signature) {
+		// 				return signatureId == signature.id();
+		// 			});
+		// 			if (signatureIt != signatures_.end()) {
+		// 				oldSignatureIt = signatureIt;
+		// 				oldFeatureStatusIt = featureStatusIt;
+		// 				break;
+		// 			}
+		// 		}
+
+		// 		if (lastSignatureIt != signatures_.end() && oldSignatureIt != signatures_.end()) {
+		// 			const Transform latestPose = lastSignatureIt->getPose();
+		// 			const Transform oldPose = oldSignatureIt->getPose();
+		// 			if (latestPose.getDistance(oldPose) < minMotion_) {
+		// 				continue;
+		// 			}
+		// 		}
+		// 	}
+
+		// 	// Calculte the optimized point's depth
+		// 	Eigen::MatrixXf svdA(static_cast<int>(2*feature.getTrackedCnt()), 4);
+		// 	int avaliableCnt = 0;
+		// 	int svdIndex = 0;
+		// 	for (auto it = feature.featureStatusInFrames_.begin(); it != feature.featureStatusInFrames_.end(); ++it) {
+		// 		const int signatureId = static_cast<int>(it->first);
+		// 		const auto findSignature = std::find_if(signatures_.begin(), signatures_.end(), [signatureId] (Signature signature) {
+		// 			return signatureId == signature.id();
+		// 		});
+		// 		if (findSignature != signatures_.end()) {
+		// 			const Eigen::Matrix4f pose = findSignature->getPose().toEigen4f() * Trc.toEigen4f();
+		// 			Eigen::Matrix<float, 3, 4> Tcw;
+		// 			Tcw.leftCols<3>() = pose.topLeftCorner(3, 3).transpose();
+		// 			Tcw.rightCols<1>() = -Tcw.leftCols<3>()*pose.topRightCorner(3, 1);
 					
-					Eigen::Vector3f f = Eigen::Vector3f(it->second.pointNormal_.x, it->second.pointNormal_.y, 1).normalized();
-					svdA.row(svdIndex++) = f[0] * Tcw.row(2) - f[2] * Tcw.row(0);
-					svdA.row(svdIndex++) = f[1] * Tcw.row(2) - f[2] * Tcw.row(1);
-					++avaliableCnt;
-				}
-			}
-			Eigen::MatrixXf svdAavalible(2*avaliableCnt, 4);
-			svdAavalible = svdA.topRows(2*avaliableCnt);
-			Eigen::Vector4f svdV = Eigen::JacobiSVD<Eigen::MatrixXf>(svdAavalible, Eigen::ComputeThinV).matrixV().rightCols<1>();
-			Eigen::Vector3f pointInWorld = Eigen::Vector3f(svdV[0]/svdV[3], svdV[1]/svdV[3], svdV[2]/svdV[3]);
+		// 			Eigen::Vector3f f = Eigen::Vector3f(it->second.pointNormal_.x, it->second.pointNormal_.y, 1).normalized();
+		// 			svdA.row(svdIndex++) = f[0] * Tcw.row(2) - f[2] * Tcw.row(0);
+		// 			svdA.row(svdIndex++) = f[1] * Tcw.row(2) - f[2] * Tcw.row(1);
+		// 			++avaliableCnt;
+		// 		}
+		// 	}
+		// 	if (avaliableCnt == 0) {continue;}
+		// 	Eigen::MatrixXf svdAavalible(2*avaliableCnt, 4);
+		// 	svdAavalible = svdA.topRows(2*avaliableCnt);
+		// 	Eigen::Vector4f svdV = Eigen::JacobiSVD<Eigen::MatrixXf>(svdAavalible, Eigen::ComputeThinV).matrixV().rightCols<1>();
+		// 	Eigen::Vector3f pointInWorld = Eigen::Vector3f(svdV[0]/svdV[3], svdV[1]/svdV[3], svdV[2]/svdV[3]);
 
-			// Update last signatures
-			const auto lastSignatureIt = signatures_.rbegin();
-			{
-				Eigen::Matrix<float, 3, 4> Tcw;
-				Eigen::Matrix4f pose = lastSignatureIt->getPose().toEigen4f();
-				Tcw.leftCols<3>() = pose.topLeftCorner(3, 3).transpose();
-				Tcw.rightCols<1>() = -Tcw.leftCols<3>()*pose.topRightCorner(3, 1);
-				Eigen::Vector3f pointInCamera = Tcw.leftCols<3>() * pointInWorld + Tcw.rightCols<1>();
-				auto signatureId = feature.featureStatusInFrames_.rbegin()->first;
-				auto lastSignatureIt = signatures_.rbegin();
-				if (signatureId == static_cast<std::size_t>(lastSignatureIt->id())) {
-					auto wordIt = word3d.find(static_cast<int>(feature.getId()));
-					if (wordIt != word3d.end())
-						wordIt->second = cv::Point3f(pointInCamera[0], pointInCamera[1], pointInCamera[2]);
-				}				
+		// 	// Update last signatures
+		// 	auto signatureId = feature.featureStatusInFrames_.rbegin()->first;
+		// 	if (lastSignatureIt->id() == static_cast<int>(signatureId)) {
+		// 		auto wordIt = word3d.find(static_cast<int>(feature.getId()));
+		// 		if (wordIt != word3d.end()) {
+		// 			Eigen::Matrix<float, 3, 4> Tcw;
+		// 			Eigen::Matrix4f pose = lastSignatureIt->getPose().toEigen4f() * Trc.toEigen4f();
+		// 			Tcw.leftCols<3>() = pose.topLeftCorner(3, 3).transpose();
+		// 			Tcw.rightCols<1>() = -Tcw.leftCols<3>()*pose.topRightCorner(3, 1);
+		// 			Eigen::Vector3f pointInCamera = Tcw.leftCols<3>() * pointInWorld + Tcw.rightCols<1>();
+		// 			wordIt->second = cv::Point3f(pointInCamera[0], pointInCamera[1], pointInCamera[2]);
+				
+		// 			// Update feature
+		// 			auto latestFeatureIt = feature.featureStatusInFrames_.rbegin();
+		// 			if (latestFeatureIt->first == static_cast<std::size_t>(lastSignatureIt->id())){
+		// 				latestFeatureIt->second.point3d_ = cv::Point3f(pointInCamera[0], pointInCamera[1], pointInCamera[2]);
+		// 			}
 
-			// Update feature
-			auto latestFeatureIt = feature.featureStatusInFrames_.rbegin();
-			if (latestFeatureIt->first == static_cast<std::size_t>(lastSignatureIt->id())){
-				latestFeatureIt->second.point3d_ = cv::Point3f(pointInCamera[0], pointInCamera[1], pointInCamera[2]);
-			}
+		// 			feature.setEstimatePose(cv::Point3f(pointInWorld[0], pointInWorld[1], pointInWorld[2]));
+		// 			feature.setSolveState(Feature::OPTIMIZED);
+							
+		// 			// display
+		// 			if (displayTracker_ && !(feature.getSolveState() == Feature::FROM_DEPTH)) {
+		// 				if (lastSignatureIt->id() == static_cast<int>(feature.featureStatusInFrames_.rbegin()->first))
+		// 					featuresDisplay_.push_back(feature);
+		// 			}
 
-			feature.setEstimatePose(cv::Point3f(pointInWorld[0], pointInWorld[1], pointInWorld[2]));
-			feature.setSolveState(Feature::OPTIMIZED);
-			}
-		}
+		// 		}
 
-		if ((feature.getSolveState() == Feature::OPTIMIZED) && !std::isfinite(feature.featureStatusInFrames_.rbegin()->second.point3d_.z)) {
-			auto latestIt = feature.featureStatusInFrames_.rbegin();
-			const int latestSignatureId = static_cast<int>(latestIt->first);
-			const auto lastSignatureIt = std::find_if(signatures_.begin(), signatures_.end(), [latestSignatureId] (Signature & signature) {
-				return latestSignatureId == signature.id();
-			});
-			cv::Point3f pointInWorld = feature.getEstimatedPose();
-			Eigen::Vector3f eigenPointInWorld(pointInWorld.x, pointInWorld.y, pointInWorld.z);
-			if (lastSignatureIt != signatures_.end()) {
-				Eigen::Matrix<float, 3, 4> Tcw;
-				Eigen::Matrix4f pose = lastSignatureIt->getPose().toEigen4f();
-				Tcw.leftCols<3>() = pose.topLeftCorner(3, 3).transpose();
-				Tcw.rightCols<1>() = -Tcw.leftCols<3>()*pose.topRightCorner(3, 1);
-				Eigen::Vector3f pointInCamera = Tcw.leftCols<3>() * eigenPointInWorld + Tcw.rightCols<1>();
+		// 	}
 
-				auto wordIt = word3d.find(static_cast<int>(feature.getId()));
-				if (wordIt != word3d.end())
-					wordIt->second = cv::Point3f(pointInCamera[0], pointInCamera[1], pointInCamera[2]);					
-				latestIt->second.point3d_ = cv::Point3f(pointInCamera[0], pointInCamera[1], pointInCamera[2]);
-			}
+		// }
 
-		}
+		// if ((feature.getSolveState() == Feature::OPTIMIZED) && !std::isfinite(feature.featureStatusInFrames_.rbegin()->second.point3d_.z)) {
+		// 	auto latestIt = feature.featureStatusInFrames_.rbegin();
+		// 	const int latestSignatureId = static_cast<int>(latestIt->first);
+		// 	const auto lastSignatureIt = std::find_if(signatures_.begin(), signatures_.end(), [latestSignatureId] (Signature & signature) {
+		// 		return latestSignatureId == signature.id();
+		// 	});
+		// 	cv::Point3f pointInWorld = feature.getEstimatedPose();
+		// 	Eigen::Vector3f eigenPointInWorld(pointInWorld.x, pointInWorld.y, pointInWorld.z);
+		// 	if (lastSignatureIt != signatures_.end()) {
+		// 		Eigen::Matrix<float, 3, 4> Tcw;
+		// 		Eigen::Matrix4f pose = lastSignatureIt->getPose().toEigen4f();
+		// 		Tcw.leftCols<3>() = pose.topLeftCorner(3, 3).transpose();
+		// 		Tcw.rightCols<1>() = -Tcw.leftCols<3>()*pose.topRightCorner(3, 1);
+		// 		Eigen::Vector3f pointInCamera = Tcw.leftCols<3>() * eigenPointInWorld + Tcw.rightCols<1>();
 
-		if (displayTracker_ && !(feature.getSolveState() == Feature::FROM_DEPTH)) {
-			if (lastSignatureIt->id() == static_cast<int>(feature.featureStatusInFrames_.rbegin()->first))
-				featuresDisplay_.push_back(feature);
-		}
+		// 		auto wordIt = word3d.find(static_cast<int>(feature.getId()));
+		// 		if (wordIt != word3d.end())
+		// 			wordIt->second = cv::Point3f(pointInCamera[0], pointInCamera[1], pointInCamera[2]);					
+		// 		latestIt->second.point3d_ = cv::Point3f(pointInCamera[0], pointInCamera[1], pointInCamera[2]);
+		// 	}
+
+		// }
 	}
-	lastSignatureIt->setWords3(word3d);
+	// lastSignatureIt->setWords3(word3d);
 }
 
 bool FeatureManager::hasSignature(const std::size_t _id) {
@@ -392,7 +451,8 @@ void FeatureManager::manageProcess(TrackerInfo & _trackInfo) {
     bool keyFrame = checkParallax(_trackInfo);
 	_trackInfo.keyframe = keyFrame;
 	cleanFeatureAndSignature(keyFrame);
-	depthRecovery();
+	if (depthRecovery_)
+		depthRecovery();
 }
 
 }

@@ -34,6 +34,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "rtabmap/core/Optimizer.h"
 #include "rtabmap/utilite/UTimer.h"
 #include "rtabmap/utilite/UStl.h"
+#include "rtabmap/core/util2d.h"
 
 namespace rtabmap {
 
@@ -44,6 +45,7 @@ FeatureTracker::FeatureTracker(const ParametersMap & _parameters) :
 	qualityLevel_(Parameters::defaultGFTTQualityLevel()),
 	minDistance_(Parameters::defaultGFTTMinDistance()),
 	flowBack_(Parameters::defaultOdomVISFSFlowBack()),
+	depthMask_(Parameters::defaultOdomVISFSDepthMask()),
 	maxDepth_(Parameters::defaultOdomVISFSMaxDepth()),
 	minDepth_(Parameters::defaultOdomVISFSMinDepth()),
 	flowWinSize_(Parameters::defaultOdomVISFSFlowWinSize()),
@@ -57,7 +59,8 @@ FeatureTracker::FeatureTracker(const ParametersMap & _parameters) :
 	pnpReprojError_(Parameters::defaultOdomVISFSPnPReprojError()),
 	pnpFlags_(Parameters::defaultOdomVISFSPnPFlags()),
 	refineIterations_(Parameters::defaultOdomVISFSRefineIterations()),
-	bundleAdjustment_(Parameters::defaultOdomVISFSBundleAdjustment()) {
+	bundleAdjustment_(Parameters::defaultOdomVISFSBundleAdjustment()),
+	depthRecovery_(Parameters::defaultOdomVISFSDepthRecovery()) {
 	parameters_ = _parameters;
 
 	Parameters::parse(parameters_, Parameters::kOdomVISFSDisplayTracker(), displayTracker_);
@@ -66,6 +69,7 @@ FeatureTracker::FeatureTracker(const ParametersMap & _parameters) :
 	Parameters::parse(parameters_, Parameters::kGFTTQualityLevel(), qualityLevel_);
 	Parameters::parse(parameters_, Parameters::kGFTTMinDistance(), minDistance_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSFlowBack(), flowBack_);
+	Parameters::parse(parameters_, Parameters::kOdomVISFSDepthMask(), depthMask_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSMaxDepth(), maxDepth_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSMinDepth(), minDepth_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSFlowWinSize(), flowWinSize_);
@@ -80,12 +84,29 @@ FeatureTracker::FeatureTracker(const ParametersMap & _parameters) :
 	Parameters::parse(parameters_, Parameters::kOdomVISFSPnPFlags(), pnpFlags_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSRefineIterations(), refineIterations_);
 	Parameters::parse(parameters_, Parameters::kOdomVISFSBundleAdjustment(), bundleAdjustment_);
+	Parameters::parse(parameters_, Parameters::kOdomVISFSDepthRecovery(), depthRecovery_);
 	uInsert(bundleParameters_, parameters_);
 
 	featureManager_ = new FeatureManager(parameters_);
 }
 
 FeatureTracker::~FeatureTracker() {}
+
+void FeatureTracker::generateDepthMask(const cv::Mat & _depthImage, cv::Mat & _mask) {
+	UASSERT(_mask.type() == CV_8UC1);
+	UASSERT(_depthImage.type() == CV_16UC1);
+	UASSERT(_depthImage.cols == _mask.cols);
+	UASSERT(_depthImage.rows == _mask.rows);
+
+	for (int i = 0; i < _depthImage.rows; ++i) {
+		for (int j = 0; j < _depthImage.cols; ++j) {
+			float depth = static_cast<float>(_depthImage.at<unsigned short>(i, j))*0.001f;
+			if (!(depth < maxDepth_ && depth > minDepth_)) {
+				_mask.at<unsigned char>(i, j) = 0;
+			}
+		}
+	}
+}
 
 std::vector<cv::Point3f> FeatureTracker::generateKeyPoints3D(const SensorData & _data, const std::vector<cv::KeyPoint> & _keyPoints) const {
 	std::vector<cv::Point3f> keyPoints3D;
@@ -420,7 +441,14 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 	if (_fromSignature.getWords().empty()) {
 		if (_fromSignature.sensorData().keypoints().empty()) {
 			std::vector<cv::Point2f> corners;
-			cv::goodFeaturesToTrack(imageFrom, corners, maxFeatures_, qualityLevel_, minDistance_);
+			if (depthMask_) {
+				cv::Mat mask = cv::Mat(imageFrom.rows, imageFrom.cols, CV_8UC1, cv::Scalar(255));
+				generateDepthMask(_fromSignature.sensorData().depthRaw(), mask);
+				cv::goodFeaturesToTrack(imageFrom, corners, maxFeatures_, qualityLevel_, minDistance_, mask);
+			} else {
+				cv::goodFeaturesToTrack(imageFrom, corners, maxFeatures_, qualityLevel_, minDistance_);
+			}
+
 			std::for_each(corners.begin(), corners.end(), [&kptsFrom](cv::Point2f point){
 				kptsFrom.push_back(cv::KeyPoint(point, 1.f));
 			});
@@ -757,6 +785,9 @@ Transform FeatureTracker::computeTransformationMod(Signature & _fromSignature, S
 	if (backUpPointsCount > 0 && !_toSignature.sensorData().imageRaw().empty()) {
 		// Set mask
 		cv::Mat mask = cv::Mat(imageTo.rows, imageTo.cols, CV_8UC1, cv::Scalar(255));
+		if (depthMask_) {
+			generateDepthMask(_toSignature.sensorData().depthRaw(), mask);
+		}
 		for (auto kpt : kptsTo) {
 			if (mask.at<unsigned char>(kpt.pt) == 255)
 				cv::circle(mask, kpt.pt, minDistance_, 0, -1);
